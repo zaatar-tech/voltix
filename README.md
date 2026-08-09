@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/zaatar-tech/voltix/actions/workflows/ci.yml/badge.svg)](https://github.com/zaatar-tech/voltix/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@zaatar-tech/voltix?color=8b5cf6)](https://www.npmjs.com/package/@zaatar-tech/voltix)
-[![gzip](https://img.shields.io/bundlephobia/minzip/@zaatar-tech/voltix?color=06b6d4&label=gzip)](https://bundlephobia.com/package/@zaatar-tech/voltix)
+[![gzip](https://img.shields.io/badge/gzip-4.4%20KB-06b6d4)](https://bundlephobia.com/package/@zaatar-tech/voltix)
 [![types](https://img.shields.io/npm/types/@zaatar-tech/voltix?color=3178c6)](https://www.npmjs.com/package/@zaatar-tech/voltix)
 [![license](https://img.shields.io/badge/license-MIT-64748b)](./LICENSE)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-22d3ee)](https://github.com/zaatar-tech/voltix/pulls)
