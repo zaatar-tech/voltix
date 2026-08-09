@@ -20,3 +20,5 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      # Fails if the gzipped size drifts from what the README and docs claim.
+      - run: npm run size

@@ -31,6 +31,8 @@
   },
   "scripts": {
     "build": "tsup src/index.ts src/eslint.ts --format esm,cjs --dts --minify",
+    "size": "node scripts/size.mjs",
+    "size:write": "node scripts/size.mjs --write",
     "test": "vitest run",
     "test:watch": "vitest",
     "bench": "vitest bench --run",

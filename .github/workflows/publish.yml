@@ -24,6 +24,9 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      # `npm ci` already built via prepare, so this checks the size the release
+      # is about to ship against the size the docs advertise.
+      - run: npm run size
 
       # `prepare` rebuilds dist before packing, so the published files are built here.
       - run: npm publish --provenance --access public
