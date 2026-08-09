@@ -11,10 +11,9 @@ type Runner = { key: string; run: (deadline: number, batch: number) => number; s
 // Each runner drives its own store's update path (with a subscriber attached) as
 // fast as it can for a fixed time slice. The count is real updates completed.
 function makeRunners(): Runner[] {
-  // Each subscriber accumulates instead of doing nothing. A no-op listener lets an
-  // optimizing JIT prove the write is unobserved and delete it outright — the
-  // simpler the store's write path, the more likely it is elided, which flatters
-  // exactly the wrong libraries. `seen` is read after the run so nothing can go.
+  // Goal: every write stays observed. A JIT is free to delete one that isn't,
+  // and the simplest write path is the easiest to delete, which would flatter
+  // the wrong libraries. `seen` is read after each run.
   let seen = 0;
   const tally = () => { seen++; };
 
@@ -24,11 +23,11 @@ function makeRunners(): Runner[] {
   const vp = proxy({ n: 0 }); vSubscribe(vp, tally); let px = 0;
   const na = nAtom(0); na.listen(tally); let nx = 0;
 
-  // The caller sizes the batch (see TARGET_S) so a batch is a fixed slice of *time*
-  // rather than a fixed op count: 256 ops is ~2µs of work for the fastest store and
-  // ~100µs for the slowest, which would make the loop's clock check tax the fastest
-  // hardest. Timing each batch here instead would break on Safari, whose clock is
-  // quantized to 1ms and reads a short batch as 0.
+  // Goal: the clock check costs every library the same share of its slice. The
+  // caller sizes the batch by time (see TARGET_S) rather than op count, since a
+  // fixed count is ~2µs of work for the fastest store and ~100µs for the slowest.
+  // It comes from the measured rate because timing a batch here would read 0 on
+  // Safari's 1ms clock.
   const slice = (fn: () => void) => (deadline: number, batch: number) => {
     let c = 0;
     do { for (let k = 0; k < batch; k++) fn(); c += batch; } while (performance.now() < deadline);
@@ -50,18 +49,17 @@ import { atom, createStore as jotai } from 'jotai/vanilla';
 import { proxy } from 'valtio/vanilla';
 import { atom as nano } from 'nanostores';
 
-// listeners count instead of doing nothing: a no-op lets a JIT prove
-// the write is unobserved and delete it, which flatters whichever
-// store has the simplest write path. seen is read after every slice.
+// Goal: every write has to be observed. A JIT is free to delete one
+// that isn't, and the simplest write path is the easiest to delete.
 let seen = 0;
 const tally = () => { seen++; };
 
 // one store per library, each with a subscriber attached
 const v = createStore({ n: 0 }); v.subscribe(['n'], tally);
-const z = zustand(() => ({ n: 0 }));  z.subscribe(tally);
+const z = zustand(() => ({ n: 0 })); z.subscribe(tally);
 const j = jotai(); const a = atom(0); j.sub(a, tally);
 const p = proxy({ n: 0 });
-const s = nano(0);                    s.listen(tally);
+const s = nano(0); s.listen(tally);
 
 let i = 0;
 const update = {
@@ -72,21 +70,18 @@ const update = {
   nanostores: () => s.set(++i),
 };
 
-// run one store's update for a fixed slice, count the ops
 function measure(run, ms, batch) {
   const t0 = performance.now();
   let ops = 0;
   do { for (let k = 0; k < batch; k++) run(); ops += batch; }
   while (performance.now() < t0 + ms);
-  // the loop finishes the batch it is in, so it runs past ms;
-  // divide by the time that actually elapsed, not by ms
+  // the loop overruns ms by up to one batch, so report real elapsed
   return { ops, elapsed: performance.now() - t0 };
 }
 
-// batch is sized from the measured rate to be ~120us of work, so
-// the loop's clock check costs every library the same fraction of
-// its time. timing each batch instead would read 0 on Safari,
-// whose clock is quantized to 1ms.
+// Goal: one clock check per ~120us of work, so it costs every
+// library the same share of its slice. The size comes from the last
+// measured rate; timing a batch directly reads 0 on Safari's 1ms clock.
 let batch = 256;
 function tick(run) {
   const { ops, elapsed } = measure(run, 1.2, batch);
@@ -95,9 +90,8 @@ function tick(run) {
   return rate;
 }`;
 
-// Split magnitude from unit so they align in their own columns — a right-aligned
-// number next to a left-aligned unit, so decimals and the M/s·K/s suffixes line up
-// down the column instead of staggering with each row's string length.
+// Magnitude and unit split into their own columns so decimals and the M/s·K/s
+// suffixes line up instead of staggering with each row's string length.
 const fmtParts = (n: number): [string, string] =>
   n >= 1e6 ? [(n / 1e6).toFixed(1), 'M/s']
   : n >= 1e3 ? [(n / 1e3).toFixed(0), 'K/s']
@@ -107,8 +101,8 @@ export default function LiveRace() {
   const runnersRef = useRef<Runner[] | null>(null);
   if (!runnersRef.current) runnersRef.current = makeRunners();
   const runners = runnersRef.current;
-  // Smooth the op count and the elapsed time separately, then divide — a rate is
-  // a ratio of sums, not a smoothed ratio, so one noisy slice can't spike it.
+  // Smooth ops and elapsed separately, then divide: a rate is a ratio of sums, so
+  // one noisy slice can't spike it.
   const opsRef = useRef<number[]>(runners.map(() => 0));
   const timeRef = useRef<number[]>(runners.map(() => 0));
   const batchRef = useRef<number[]>(runners.map(() => 256));
@@ -123,19 +117,20 @@ export default function LiveRace() {
     if (!running || tab !== 'demo') return;
     let raf = 0;
     const SLICE = 1.2;         // ms per library per frame
-    const TAU = 500;           // ms; time-constant of the sliding-rate window
-    const REJECT = SLICE * 3;  // a slice that measured >3.6ms means the OS stole the
-                               // thread mid-run — that sample is corrupt, drop it. The
-                               // 3x margin clears timer coarsening (1ms on FF/Safari)
-                               // so genuine slices are never mistaken for stalls.
+    const TAU = 1500;          // ms; sliding-rate window. Per-slice noise is ~±10%
+                               // whatever the harness does, so the window is what
+                               // decides how much the shown number jumps: 500ms
+                               // reads ±13%, 1500ms ±4%, and wider than that starts
+                               // dragging in stale samples.
+    const REJECT = SLICE * 3;  // >3.6ms means the OS stole the thread mid-slice; drop
+                               // it. The 3x margin clears 1ms timer coarsening.
     const ops = opsRef.current;
     const time = timeRef.current;
     const batch = batchRef.current;
     const TARGET_S = 120e-6; // work per batch, in seconds
 
-    // Warm every library to steady-state JIT once, up front, so the first number
-    // shown reflects optimized code rather than a cold-compile ramp. Same budget
-    // for each, so no library is measured at an advantage.
+    // Warm to steady-state JIT once, so the first number is optimized code rather
+    // than a cold-compile ramp. Same budget each.
     if (!warmedRef.current) {
       for (let i = 0; i < runners.length; i++) runners[i].run(performance.now() + 50, batch[i]);
       warmedRef.current = true;
@@ -143,11 +138,9 @@ export default function LiveRace() {
 
     let last = performance.now();
     const loop = () => {
-      // Decay by real elapsed time, so the smoothing window is a fixed ~0.5s
-      // regardless of frame rate (or a dropped/backgrounded frame). Read the clock
-      // here rather than from the rAF timestamp: a different time origin would make
-      // dt hugely negative, exp() overflow to Infinity, and 0*Infinity poison every
-      // accumulator to NaN. Clamp dt >= 0 so decay stays in (0, 1] no matter what.
+      // Decay by real elapsed time, so the window stays ~0.5s at any frame rate.
+      // Read the clock here, not the rAF timestamp: a different time origin would
+      // make dt negative and poison the accumulators. Clamp dt >= 0.
       const now = performance.now();
       const dt = Math.max(0, now - last);
       last = now;
@@ -157,8 +150,8 @@ export default function LiveRace() {
         const c = runners[i].run(t0 + SLICE, batch[i]);
         const el = performance.now() - t0;
         sinkRef.current += runners[i].sink();
-        // Accept clean slices only; the `time === 0` clause always primes the very
-        // first sample so a slow cold start can never leave the row stuck at zero.
+        // Clean slices only; `time === 0` primes the first sample so a slow start
+        // can't leave the row at zero.
         if (el > 0 && (el <= REJECT || time[i] === 0)) {
           ops[i] = ops[i] * decay + c;
           time[i] = time[i] * decay + el;
