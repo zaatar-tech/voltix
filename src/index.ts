@@ -219,7 +219,7 @@ type InternalStore<T extends object> = StoreType<T> & {
 class Voltix<T extends object> implements StoreType<T> {
   private state: T;
   private readonly _initialState: T;
-  private readonly keyListeners: Record<string, Set<StoreListener> | undefined>;
+  private readonly keyListeners: Record<string, readonly StoreListener[] | undefined>;
   private equalityRegistry: Record<string, ((prev: any, next: any) => boolean) | undefined> | null;
   private schemaRegistry: Record<string, SchemaProps | undefined> | null;
   private schemaErrorHandlers: Set<(error: SchemaError<T>) => void> | null;
@@ -233,6 +233,10 @@ class Voltix<T extends object> implements StoreType<T> {
   constructor(initialState: T, options?: StoreOptions<T>) {
     this._initialState = { ...initialState };
     this.state = { ...initialState };
+    // Listeners are arrays, not Sets: iterating a Set allocates an iterator on
+    // every notify, which only some engines optimize away. Add/remove rebuild
+    // the array (copy-on-write) so a notify already walking one cannot see it
+    // change under it.
     this.keyListeners = Object.create(null);
     this.equalityRegistry = null;
     this.schemaRegistry = null;
@@ -321,7 +325,7 @@ class Voltix<T extends object> implements StoreType<T> {
       return;
     }
     const listeners = this.keyListeners[key as string];
-    if (listeners) for (const listener of listeners) listener();
+    if (listeners !== undefined) for (let i = 0; i < listeners.length; i++) listeners[i]();
   }
 
   private applySingleKey<K extends keyof T>(key: K, value: T[K]): void {
@@ -339,7 +343,13 @@ class Voltix<T extends object> implements StoreType<T> {
       }
     }
     const prev = this.state[key];
-    if (Object.is(prev, value)) return;
+    // SameValue, inlined: this runs on every write, and the builtin costs a call.
+    // Fast `===` first, then the two corrections Object.is makes (NaN, +0/-0).
+    if (prev === value) {
+      if ((prev as unknown) !== 0 || 1 / (prev as unknown as number) === 1 / (value as unknown as number)) return;
+    } else if (prev !== prev && value !== value) {
+      return;
+    }
     const eqReg = this.equalityRegistry;
     if (eqReg !== null) {
       const eq = eqReg[key as string];
@@ -408,8 +418,9 @@ class Voltix<T extends object> implements StoreType<T> {
       const notified = new Set<StoreListener>();
       for (const key of keys) {
         const listeners = this.keyListeners[key as string];
-        if (!listeners) continue;
-        for (const listener of listeners) {
+        if (listeners === undefined) continue;
+        for (let i = 0; i < listeners.length; i++) {
+          const listener = listeners[i];
           if (!notified.has(listener)) {
             notified.add(listener);
             listener();
@@ -499,13 +510,14 @@ class Voltix<T extends object> implements StoreType<T> {
         const keyListeners = this.keyListeners;
         if (!changedKeys) {
           const listeners = keyListeners[firstKey];
-          if (listeners) for (const listener of listeners) listener();
+          if (listeners !== undefined) for (let i = 0; i < listeners.length; i++) listeners[i]();
         } else {
           const notified = new Set<StoreListener>();
           for (const key of changedKeys) {
             const listeners = keyListeners[key];
-            if (!listeners) continue;
-            for (const listener of listeners) {
+            if (listeners === undefined) continue;
+            for (let i = 0; i < listeners.length; i++) {
+              const listener = listeners[i];
               if (!notified.has(listener)) {
                 notified.add(listener);
                 listener();
@@ -537,13 +549,18 @@ class Voltix<T extends object> implements StoreType<T> {
     const keyListeners = this.keyListeners;
     for (const key of keys) {
       const k = key as string;
-      if (!keyListeners[k]) keyListeners[k] = new Set();
-      keyListeners[k]!.add(listener);
+      const arr = keyListeners[k];
+      if (arr === undefined) keyListeners[k] = [listener];
+      else if (arr.indexOf(listener) === -1) keyListeners[k] = arr.concat(listener);
     }
 
     return () => {
       for (const key of keys) {
-        keyListeners[key as string]?.delete(listener);
+        const k = key as string;
+        const arr = keyListeners[k];
+        if (arr === undefined) continue;
+        const i = arr.indexOf(listener);
+        if (i > -1) keyListeners[k] = arr.slice(0, i).concat(arr.slice(i + 1));
       }
     };
   }

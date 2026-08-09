@@ -6,18 +6,23 @@ import { proxy, subscribe as vSubscribe } from 'valtio/vanilla';
 import { atom as nAtom } from 'nanostores';
 import { hl } from '../hl';
 
-type Runner = { key: string; run: (deadline: number, batch: number) => number };
+type Runner = { key: string; run: (deadline: number, batch: number) => number; sink: () => number };
 
 // Each runner drives its own store's update path (with a subscriber attached) as
 // fast as it can for a fixed time slice. The count is real updates completed.
 function makeRunners(): Runner[] {
-  const noop = () => {};
+  // Each subscriber accumulates instead of doing nothing. A no-op listener lets an
+  // optimizing JIT prove the write is unobserved and delete it outright — the
+  // simpler the store's write path, the more likely it is elided, which flatters
+  // exactly the wrong libraries. `seen` is read after the run so nothing can go.
+  let seen = 0;
+  const tally = () => { seen++; };
 
-  const vs = createStore({ n: 0 }); vs.subscribe(['n'], noop); let vx = 0;
-  const zs = zCreate<{ n: number }>(() => ({ n: 0 })); zs.subscribe(noop); let zx = 0;
-  const js = jCreate(); const ja = jAtom(0); js.sub(ja, noop); let jx = 0;
-  const vp = proxy({ n: 0 }); vSubscribe(vp, noop); let px = 0;
-  const na = nAtom(0); na.listen(noop); let nx = 0;
+  const vs = createStore({ n: 0 }); vs.subscribe(['n'], tally); let vx = 0;
+  const zs = zCreate<{ n: number }>(() => ({ n: 0 })); zs.subscribe(tally); let zx = 0;
+  const js = jCreate(); const ja = jAtom(0); js.sub(ja, tally); let jx = 0;
+  const vp = proxy({ n: 0 }); vSubscribe(vp, tally); let px = 0;
+  const na = nAtom(0); na.listen(tally); let nx = 0;
 
   // The caller sizes the batch (see TARGET_S) so a batch is a fixed slice of *time*
   // rather than a fixed op count: 256 ops is ~2µs of work for the fastest store and
@@ -31,11 +36,11 @@ function makeRunners(): Runner[] {
   };
 
   return [
-    { key: 'Voltix', run: slice(() => vs.setKey('n', ++vx)) },
-    { key: 'Zustand', run: slice(() => zs.setState({ n: ++zx })) },
-    { key: 'Jotai', run: slice(() => js.set(ja, ++jx)) },
-    { key: 'Valtio', run: slice(() => { vp.n = ++px; }) },
-    { key: 'nanostores', run: slice(() => na.set(++nx)) },
+    { key: 'Voltix', run: slice(() => vs.setKey('n', ++vx)), sink: () => seen + vs.getKey('n') },
+    { key: 'Zustand', run: slice(() => zs.setState({ n: ++zx })), sink: () => seen + zs.getState().n },
+    { key: 'Jotai', run: slice(() => js.set(ja, ++jx)), sink: () => seen + js.get(ja) },
+    { key: 'Valtio', run: slice(() => { vp.n = ++px; }), sink: () => seen + vp.n },
+    { key: 'nanostores', run: slice(() => na.set(++nx)), sink: () => seen + na.get() },
   ];
 }
 
@@ -45,14 +50,18 @@ import { atom, createStore as jotai } from 'jotai/vanilla';
 import { proxy } from 'valtio/vanilla';
 import { atom as nano } from 'nanostores';
 
-const noop = () => {};
+// listeners count instead of doing nothing: a no-op lets a JIT prove
+// the write is unobserved and delete it, which flatters whichever
+// store has the simplest write path. seen is read after every slice.
+let seen = 0;
+const tally = () => { seen++; };
 
 // one store per library, each with a subscriber attached
-const v = createStore({ n: 0 }); v.subscribe(['n'], noop);
-const z = zustand(() => ({ n: 0 }));  z.subscribe(noop);
-const j = jotai(); const a = atom(0); j.sub(a, noop);
+const v = createStore({ n: 0 }); v.subscribe(['n'], tally);
+const z = zustand(() => ({ n: 0 }));  z.subscribe(tally);
+const j = jotai(); const a = atom(0); j.sub(a, tally);
 const p = proxy({ n: 0 });
-const s = nano(0);                    s.listen(noop);
+const s = nano(0);                    s.listen(tally);
 
 let i = 0;
 const update = {
@@ -105,6 +114,7 @@ export default function LiveRace() {
   const batchRef = useRef<number[]>(runners.map(() => 256));
   const warmedRef = useRef(false);
 
+  const sinkRef = useRef(0);
   const [rows, setRows] = useState(() => runners.map((r) => ({ key: r.key, ops: 0 })));
   const [running, setRunning] = useState(true);
   const [tab, setTab] = useState<'demo' | 'source'>('demo');
@@ -146,6 +156,7 @@ export default function LiveRace() {
         const t0 = performance.now();
         const c = runners[i].run(t0 + SLICE, batch[i]);
         const el = performance.now() - t0;
+        sinkRef.current += runners[i].sink();
         // Accept clean slices only; the `time === 0` clause always primes the very
         // first sample so a slow cold start can never leave the row stuck at zero.
         if (el > 0 && (el <= REJECT || time[i] === 0)) {

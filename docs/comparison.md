@@ -35,10 +35,10 @@ Store-engine microbenchmarks (vanilla stores, no React), in operations per secon
 
 | operation | **Voltix** | Zustand | nanostores | Valtio | Jotai |
 |---|---|---|---|---|---|
-| update a value + notify | **41.0M** | 21.1M | 18.6M | 5.3M | 2.5M |
-| functional update (`x => x + 1`) | **40.6M** | 19.7M | 18.0M | 5.1M | 2.1M |
-| fine-grained update (1 of 1000) | **40.5M** | 21.5M † | 18.5M | 53K ‡ | 2.3M |
-| notify 1000 subscribers | **277K** | 170K | 82K | — | 52K |
+| update a value + notify | **43.8M** | 20.1M | 18.8M | 5.3M | 2.5M |
+| functional update (`x => x + 1`) | **41.1M** | 20.1M | 17.1M | 5.1M | 2.1M |
+| fine-grained update (1 of 1000) | **41.6M** | 21.6M † | 18.7M | 56K ‡ | 2.3M |
+| notify 1000 subscribers | **297K** | 164K | 81K | — | 53K |
 
 <sub>† Zustand's fine-grained row uses separate stores; its single-store selector pattern is O(N) in the number of subscribers. ‡ Valtio batches notifications asynchronously and its per-key subscribe is O(N).</sub>
 

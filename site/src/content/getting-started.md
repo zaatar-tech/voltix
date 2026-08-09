@@ -16,7 +16,7 @@ Voltix is a fine-grained state manager for React. You create a store that holds 
 npm i @zaatar-tech/voltix
 ```
 
-`react` is the only peer dependency. The package is about 4.3 KB gzipped and ships its own types.
+`react` is the only peer dependency. The package is about 4.4 KB gzipped and ships its own types.
 
 ## Your first store
 

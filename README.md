@@ -15,7 +15,7 @@
 
 </div>
 
-Voltix is a **~4.3 KB** global store for React with per-key subscriptions: set one field and only the components reading that field re-render. There is no provider to set up and there are no selector functions to write. Stores compose into a tree of nested stores and per-id lookups. Full TypeScript inference, zero dependencies, and the fastest update throughput of any React store we've measured.
+Voltix is a **~4.4 KB** global store for React with per-key subscriptions: set one field and only the components reading that field re-render. There is no provider to set up and there are no selector functions to write. Stores compose into a tree of nested stores and per-id lookups. Full TypeScript inference, zero dependencies, and the fastest update throughput of any React store we've measured.
 
 ```tsx
 import { createStore, useStoreKey } from '@zaatar-tech/voltix';
@@ -37,7 +37,7 @@ function Counter() {
 - **Fully typed, inference-first.** Keys, values, selectors, and equality functions are all inferred from your store. Selecting a key that doesn't exist is a compile error.
 - **Runtime contracts.** Put a zod (or valibot/arktype) schema on a key. Invalid writes are rejected, initial state included, and `onSchemaError` routes failures into your UI. Standard Schema keeps it dependency-free.
 - **Batteries included.** Action helpers, derived keys, write interceptors, persistence (sync + async), and an ESLint rule ship in the box.
-- **Tiny and dependency-free.** ~4.3 KB gzipped, tree-shakeable, `react` as the only peer.
+- **Tiny and dependency-free.** ~4.4 KB gzipped, tree-shakeable, `react` as the only peer.
 
 ## Benchmarks
 
@@ -45,10 +45,10 @@ Update throughput vs the latest Zustand, Jotai, Valtio, and nanostores (vanilla 
 
 | operation | **Voltix** | Zustand | nanostores | Valtio | Jotai |
 |---|---|---|---|---|---|
-| update a value + notify | **41.0M** | 21.1M | 18.6M | 5.3M | 2.5M |
-| functional update (`x => x + 1`) | **40.6M** | 19.7M | 18.0M | 5.1M | 2.1M |
-| fine-grained update (1 of 1000) | **40.5M** | 21.5M † | 18.5M | 53K ‡ | 2.3M |
-| notify 1000 subscribers | **277K** | 170K | 82K | — | 52K |
+| update a value + notify | **43.8M** | 20.1M | 18.8M | 5.3M | 2.5M |
+| functional update (`x => x + 1`) | **41.1M** | 20.1M | 17.1M | 5.1M | 2.1M |
+| fine-grained update (1 of 1000) | **41.6M** | 21.6M † | 18.7M | 56K ‡ | 2.3M |
+| notify 1000 subscribers | **297K** | 164K | 81K | — | 53K |
 
 Run `npm run bench` to reproduce ([`src/vs.bench.ts`](src/vs.bench.ts)). The gap matters under high write rates: drag interactions, streaming data, animation, and large grids of independently updating cells.
 
