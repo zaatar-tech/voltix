@@ -24,5 +24,8 @@ pnpm-lock.yaml
 site/public/docs/
 site/public/llms.txt
 
+google*.html
+site/public/_redirects
+
 # MacOS/OS junk
 .DS_Store
