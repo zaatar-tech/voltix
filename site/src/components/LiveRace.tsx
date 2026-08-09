@@ -19,10 +19,27 @@ function makeRunners(): Runner[] {
   const vp = proxy({ n: 0 }); vSubscribe(vp, noop); let px = 0;
   const na = nAtom(0); na.listen(noop); let nx = 0;
 
-  const slice = (fn: () => void) => (deadline: number) => {
-    let c = 0;
-    do { for (let k = 0; k < 256; k++) fn(); c += 256; } while (performance.now() < deadline);
-    return c;
+  // Batches are sized by time, not op count: a fixed 256-op batch is ~2µs of work
+  // for the fastest store but ~100µs for the slowest, so the per-batch clock check
+  // taxes the fastest hardest. Each runner tunes its batch toward ~120µs (kept
+  // across calls), making the check the same fraction of work for every library.
+  const TARGET_US = 120;
+  const slice = (fn: () => void) => {
+    let batch = 256;
+    return (deadline: number) => {
+      let c = 0;
+      do {
+        const b0 = performance.now();
+        for (let k = 0; k < batch; k++) fn();
+        c += batch;
+        const us = (performance.now() - b0) * 1000;
+        if (us > 0) {
+          const scaled = Math.round(batch * (TARGET_US / us));
+          batch = Math.max(64, Math.min(1 << 20, (scaled + batch) >> 1));
+        }
+      } while (performance.now() < deadline);
+      return c;
+    };
   };
 
   return [
@@ -58,12 +75,19 @@ const update = {
   nanostores: () => s.set(++i),
 };
 
-// run one store's update for a fixed slice, count the ops
+// run one store's update for a fixed slice, count the ops.
+// the batch grows toward ~120µs of work, so the clock check
+// costs every library the same fraction of its time
 function measure(run, ms) {
   const end = performance.now() + ms;
-  let ops = 0;
-  do { for (let k = 0; k < 256; k++) run(); ops += 256; }
-  while (performance.now() < end);
+  let ops = 0, batch = 256;
+  do {
+    const t0 = performance.now();
+    for (let k = 0; k < batch; k++) run();
+    ops += batch;
+    const us = (performance.now() - t0) * 1000;
+    batch = Math.max(64, Math.round(batch * (120 / Math.max(us, 1))));
+  } while (performance.now() < end);
   return ops / (ms / 1000); // updates per second
 }`;
 
@@ -173,7 +197,7 @@ export default function LiveRace() {
             );
           })}
           <p className="note">
-            Every store runs the same increment for a 1.2&nbsp;ms slice each frame; the bar is real updates completed per second. This is the store engine, not React re-renders. Valtio batches notifications, so its writes skip a synchronous notify.
+            Same increment, 1.2&nbsp;ms per store per frame, counted as updates per second.
           </p>
         </>
       ) : (
