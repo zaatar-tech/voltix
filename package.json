@@ -1,6 +1,6 @@
 {
   "name": "@zaatar-tech/voltix",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Fastest React state library. Per-key subscriptions, 4 KB, zero dependencies.",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -25,7 +25,7 @@
     "type": "git",
     "url": "git+https://github.com/zaatar-tech/voltix.git"
   },
-  "homepage": "https://github.com/zaatar-tech/voltix",
+  "homepage": "https://voltix.pages.dev",
   "bugs": {
     "url": "https://github.com/zaatar-tech/voltix/issues"
   },

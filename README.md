@@ -11,7 +11,7 @@
 [![license](https://img.shields.io/badge/license-MIT-64748b)](./LICENSE)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-22d3ee)](https://github.com/zaatar-tech/voltix/pulls)
 
-[Website](https://voltix.pages.dev) · [GitHub](https://github.com/zaatar-tech/voltix) · [Docs](./docs) · [Benchmarks](#benchmarks)
+[Website](https://voltix.pages.dev) · [npm](https://www.npmjs.com/package/@zaatar-tech/voltix) · [GitHub](https://github.com/zaatar-tech/voltix) · [Docs](./docs) · [Benchmarks](#benchmarks)
 
 </div>
 
