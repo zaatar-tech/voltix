@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { createStore } from 'voltix';
+import { createStore } from '@zaatar-tech/voltix';
 import { createStore as zCreate } from 'zustand/vanilla';
 import { atom as jAtom, createStore as jCreate } from 'jotai/vanilla';
 import { proxy, subscribe as vSubscribe } from 'valtio/vanilla';
@@ -34,7 +34,7 @@ function makeRunners(): Runner[] {
   ];
 }
 
-const SOURCE = `import { createStore } from 'voltix';
+const SOURCE = `import { createStore } from '@zaatar-tech/voltix';
 import { createStore as zustand } from 'zustand/vanilla';
 import { atom, createStore as jotai } from 'jotai/vanilla';
 import { proxy } from 'valtio/vanilla';

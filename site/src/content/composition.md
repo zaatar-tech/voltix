@@ -32,7 +32,7 @@ workspace                leaves: name, syncing
 Build the child first. Settings is a normal store with its own actions. It works on its own and knows nothing about any workspace:
 
 ```tsx
-import { createStore, createActions } from 'voltix';
+import { createStore, createActions } from '@zaatar-tech/voltix';
 
 export const settings = createStore({ theme: 'dark' as 'dark' | 'light', fontSize: 14 });
 
@@ -87,7 +87,7 @@ The factory builds each store completely, so every document comes with its contr
 
 ```tsx
 import { z } from 'zod';
-import { createStore, createLookup, createActions } from 'voltix';
+import { createStore, createLookup, createActions } from '@zaatar-tech/voltix';
 
 export function makeDocument(id: string) {
   const document = createStore(

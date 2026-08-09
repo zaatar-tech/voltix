@@ -1,6 +1,6 @@
 # API reference
 
-Every export from `voltix`, plus every method on a store. Types are shown as they appear in the source. `T` is your state shape.
+Every export from `@zaatar-tech/voltix`, plus every method on a store. Types are shown as they appear in the source. `T` is your state shape.
 
 - [Getting started](./getting-started.md)
 - [Core concepts](./core-concepts.md)
@@ -37,7 +37,7 @@ function createStore<T extends object>(
 Creates a [`Store`](#store) from a state object. A key holding a store or [`Lookup`](#lookup) becomes a child (see [Composition](./composition.md)); every other key is a leaf. Passing a store *as* the shape, or passing a function, is a `TypeError`: stores go under a key, factories go to [`createLookup`](#createlookup).
 
 ```tsx
-import { createStore } from 'voltix';
+import { createStore } from '@zaatar-tech/voltix';
 
 const store = createStore({ count: 0, name: 'Ada' });
 ```
@@ -83,7 +83,7 @@ function createLookup<Id extends PropertyKey, C extends object>(
 Creates a [`Lookup`](#lookup): a store per id. The first `at(id)` runs `factory` and keeps the result. A factory that returns a built store is kept exactly as returned; a factory that returns a plain shape gets a store built for it, with `options` applied to each one.
 
 ```tsx
-import { createLookup } from 'voltix';
+import { createLookup } from '@zaatar-tech/voltix';
 
 const documents = createLookup((id: string) => ({ title: 'Untitled', body: '' }));
 documents.at('readme').setKey('title', 'README');
@@ -246,7 +246,7 @@ Schemas are [Standard Schemas](https://standardschema.dev), the shared interface
 
 ```tsx
 import { z } from 'zod';
-import { createStore } from 'voltix';
+import { createStore } from '@zaatar-tech/voltix';
 
 const account = createStore(
   { balance: 0, email: '' },
@@ -662,7 +662,7 @@ function View() {
 
 ## Helpers
 
-Standalone functions, imported from `voltix`.
+Standalone functions, imported from `@zaatar-tech/voltix`.
 
 ### `merge` (helper)
 
@@ -752,9 +752,9 @@ A `PersistParser` controls how values become strings. The default handles JSON p
 
 ---
 
-## ESLint plugin (`voltix/eslint`)
+## ESLint plugin (`@zaatar-tech/voltix/eslint`)
 
-Voltix ships an ESLint plugin at the `voltix/eslint` subpath with one rule, `voltix/no-unused-selector-keys`. Every key in a selector is a subscription, so a selected-but-unused key means re-renders for data the component never reads. The rule warns on exactly that:
+Voltix ships an ESLint plugin at the `@zaatar-tech/voltix/eslint` subpath with one rule, `voltix/no-unused-selector-keys`. Every key in a selector is a subscription, so a selected-but-unused key means re-renders for data the component never reads. The rule warns on exactly that:
 
 ```tsx
 const { count } = useStoreSelector(store, ['count', 'name']);
@@ -765,7 +765,7 @@ It works with zero configuration. `useStoreSelector(store, [...])` calls are rec
 
 ```js
 // eslint.config.js
-import voltix from 'voltix/eslint';
+import voltix from '@zaatar-tech/voltix/eslint';
 
 export default [
   {
@@ -778,7 +778,7 @@ export default [
 The recommended preset is also available for spreading:
 
 ```js
-import voltix from 'voltix/eslint';
+import voltix from '@zaatar-tech/voltix/eslint';
 
 export default [voltix.configs.recommended];
 ```

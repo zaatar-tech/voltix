@@ -19,7 +19,7 @@ See also [Core concepts](./core-concepts.md) and the [API reference](./api-refer
 [`createActions`](./api-reference.md#createactions) collects the functions that write to a store and returns them as a plain object. The store is untouched; actions are normal functions that use it.
 
 ```tsx
-import { createStore, createActions } from 'voltix';
+import { createStore, createActions } from '@zaatar-tech/voltix';
 
 export const counter = createStore({ count: 0 });
 
@@ -34,7 +34,7 @@ Call an action from anywhere, and use the store's own methods and hooks as usual
 
 ```tsx
 import { counter, counterActions } from './counter';
-import { useStoreKey } from 'voltix';
+import { useStoreKey } from '@zaatar-tech/voltix';
 
 function Counter() {
   const count = useStoreKey(counter, 'count');
@@ -76,7 +76,7 @@ TypeScript can't check data that arrives at runtime: fetch responses, `localStor
 
 ```tsx
 import { z } from 'zod';
-import { createStore } from 'voltix';
+import { createStore } from '@zaatar-tech/voltix';
 
 export const profile = createStore(
   { email: '', age: 0, plan: 'free' as 'free' | 'pro' },
@@ -244,7 +244,7 @@ Once any interceptor is registered, writes through `setKey`, `update`, `incremen
 Seed the initial state from storage at creation, then start persisting:
 
 ```tsx
-import { createStore, persist, loadPersistedState } from 'voltix';
+import { createStore, persist, loadPersistedState } from '@zaatar-tech/voltix';
 
 type State = { theme: 'light' | 'dark'; isLoggedIn: boolean };
 
@@ -267,7 +267,7 @@ store.setKey('theme', 'dark'); // persisted immediately
 
 ```tsx
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createStore, persist, loadPersistedState } from 'voltix';
+import { createStore, persist, loadPersistedState } from '@zaatar-tech/voltix';
 
 type State = { theme: 'light' | 'dark' };
 
@@ -306,7 +306,7 @@ const persisted = loadPersistedState(localStorage, 'myapp', ['snapshot'], superj
 Writing your own is two functions: `stringify` gets a value and returns the string to store, `parse` gets that string back and returns the value. The `PersistParser` type is exported. One that keeps `BigInt`:
 
 ```ts
-import { persist, loadPersistedState, type PersistParser } from 'voltix';
+import { persist, loadPersistedState, type PersistParser } from '@zaatar-tech/voltix';
 
 const bigintParser: PersistParser = {
   stringify: (value) => JSON.stringify(value, (key, v) =>

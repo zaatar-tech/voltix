@@ -17,7 +17,7 @@ Keep a request in the store as three keys: `status`, `data`, `error`. The spinne
 Put the fetch in a function next to the store. `set` writes several keys in one update, so a component reading two of them re-renders once.
 
 ```tsx
-import { createStore } from 'voltix';
+import { createStore } from '@zaatar-tech/voltix';
 
 type User = { id: string; name: string };
 type Status = 'idle' | 'loading' | 'success' | 'error';
@@ -44,7 +44,7 @@ export async function loadUsers() {
 In components, split the reads: the shell reads `status`, the list reads `data`. Refetching a fresh list never re-runs the spinner branch.
 
 ```tsx
-import { useStoreKey, useStoreSelector } from 'voltix';
+import { useStoreKey, useStoreSelector } from '@zaatar-tech/voltix';
 import { users, loadUsers } from './users';
 
 function UserList() {
@@ -86,7 +86,7 @@ Because the store lives outside React, mounting two `UserList` components does n
 When the request depends on an input (a selected id, a search query), keep the input in the store and fetch when it changes. Before writing the response, check the store still wants it — switch documents quickly and a slow old response can land after a newer one:
 
 ```tsx
-import { createStore } from 'voltix';
+import { createStore } from '@zaatar-tech/voltix';
 
 type Doc = { id: string; title: string; body: string };
 
@@ -148,7 +148,7 @@ For data that changes on the server, load a full snapshot once, then poll for wh
 The store holds the rows by id, their order, and the current cursor.
 
 ```tsx
-import { createStore } from 'voltix';
+import { createStore } from '@zaatar-tech/voltix';
 
 type Order = { id: string; total: number; status: string };
 
@@ -227,7 +227,7 @@ useEffect(() => startPolling(), []);
 The single-map version above re-renders every reader of `byId` on any delta. When a poll touches three rows out of thousands, exactly three components should re-render. Give each row its own store with a [lookup](./composition.md#lookups-a-store-per-id): an index store holds the id list and the cursor, and each row reads its own store.
 
 ```tsx
-import { createStore } from 'voltix';
+import { createStore } from '@zaatar-tech/voltix';
 
 type Row = { id: string; total: number; status: string };
 type Snapshot = { rows: Row[]; cursor: string };
@@ -263,7 +263,7 @@ export { rows };
 A delta that changes one row's `status` wakes that one `<TableRow>` and nothing else. `<Table>` re-renders only when a row is added or removed, because that is the only time `ids` changes.
 
 ```tsx
-import { useStoreSelector } from 'voltix';
+import { useStoreSelector } from '@zaatar-tech/voltix';
 import { table, rows } from './table';
 
 function Table() {

@@ -25,7 +25,7 @@ export default defineConfig({
   plugins: [react(), viteSingleFile(), ogCacheBust()],
   resolve: {
     alias: {
-      voltix: fileURLToPath(new URL('../src/index.ts', import.meta.url)),
+      '@zaatar-tech/voltix': fileURLToPath(new URL('../src/index.ts', import.meta.url)),
     },
   },
   server: { fs: { allow: ['..', '../..'] } },

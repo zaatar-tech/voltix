@@ -5,9 +5,9 @@
 **Fastest React state library.**
 
 [![CI](https://github.com/zaatar-tech/voltix/actions/workflows/ci.yml/badge.svg)](https://github.com/zaatar-tech/voltix/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/voltix?color=8b5cf6)](https://www.npmjs.com/package/voltix)
-[![gzip](https://img.shields.io/bundlephobia/minzip/voltix?color=06b6d4&label=gzip)](https://bundlephobia.com/package/voltix)
-[![types](https://img.shields.io/npm/types/voltix?color=3178c6)](https://www.npmjs.com/package/voltix)
+[![npm](https://img.shields.io/npm/v/@zaatar-tech/voltix?color=8b5cf6)](https://www.npmjs.com/package/@zaatar-tech/voltix)
+[![gzip](https://img.shields.io/bundlephobia/minzip/@zaatar-tech/voltix?color=06b6d4&label=gzip)](https://bundlephobia.com/package/@zaatar-tech/voltix)
+[![types](https://img.shields.io/npm/types/@zaatar-tech/voltix?color=3178c6)](https://www.npmjs.com/package/@zaatar-tech/voltix)
 [![license](https://img.shields.io/badge/license-MIT-64748b)](./LICENSE)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-22d3ee)](https://github.com/zaatar-tech/voltix/pulls)
 
@@ -18,7 +18,7 @@
 Voltix is a **~4.3 KB** global store for React with per-key subscriptions: set one field and only the components reading that field re-render. There is no provider to set up and there are no selector functions to write. Stores compose into a tree of nested stores and per-id lookups. Full TypeScript inference, zero dependencies, and the fastest update throughput of any React store we've measured.
 
 ```tsx
-import { createStore, useStoreKey } from 'voltix';
+import { createStore, useStoreKey } from '@zaatar-tech/voltix';
 
 const store = createStore({ count: 0 });
 
@@ -57,7 +57,7 @@ Run `npm run bench` to reproduce ([`src/vs.bench.ts`](src/vs.bench.ts)). The gap
 ## Install
 
 ```bash
-npm i voltix
+npm i @zaatar-tech/voltix
 ```
 
 ## The idea: fine-grained by key
@@ -132,11 +132,11 @@ Full reference in the [docs](./docs).
 
 ## ESLint rule
 
-The package includes an ESLint rule (at `voltix/eslint`) that flags selector keys you never use. Requires ESLint 9+ (flat config):
+The package includes an ESLint rule (at `@zaatar-tech/voltix/eslint`) that flags selector keys you never use. Requires ESLint 9+ (flat config):
 
 ```js
 // eslint.config.js
-import voltix from 'voltix/eslint';
+import voltix from '@zaatar-tech/voltix/eslint';
 
 export default [{
   plugins: { voltix },

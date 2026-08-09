@@ -40,7 +40,7 @@ const og = `<svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://
   ${MARK(120, 540, 58)}
   <text x="600" y="342" text-anchor="middle" font-family="Helvetica Neue, Helvetica, Arial" font-weight="800" font-size="164" letter-spacing="-4" fill="url(#textGrad)">FASTEST</text>
   <text x="600" y="440" text-anchor="middle" font-family="Helvetica Neue, Helvetica, Arial" font-weight="800" font-size="80" letter-spacing="-2" fill="#ececf4">React state library</text>
-  <text x="600" y="546" text-anchor="middle" font-family="Menlo, monospace" font-size="26" fill="#7c7c8c">npm i voltix<tspan dx="26" fill="#3a3a4a">·</tspan><tspan dx="26">4 KB</tspan><tspan dx="26" fill="#3a3a4a">·</tspan><tspan dx="26">per-key subscriptions</tspan></text>
+  <text x="600" y="546" text-anchor="middle" font-family="Menlo, monospace" font-size="26" fill="#7c7c8c">npm i @zaatar-tech/voltix<tspan dx="26" fill="#3a3a4a">·</tspan><tspan dx="26">4 KB</tspan><tspan dx="26" fill="#3a3a4a">·</tspan><tspan dx="26">per-key subscriptions</tspan></text>
 </svg>`;
 
 const touch = `<svg width="180" height="180" viewBox="0 0 180 180" xmlns="http://www.w3.org/2000/svg">

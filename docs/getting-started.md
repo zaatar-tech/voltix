@@ -13,7 +13,7 @@ Voltix is a fine-grained state manager for React. You create a store that holds 
 ## Install
 
 ```bash
-npm i voltix
+npm i @zaatar-tech/voltix
 ```
 
 `react` is the only peer dependency. The package is about 4.3 KB gzipped and ships its own types.
@@ -23,7 +23,7 @@ npm i voltix
 Create a store once, at module scope, from an initial state object. It lives outside React: any module can read or write it, and there is no provider to set up.
 
 ```tsx
-import { createStore } from 'voltix';
+import { createStore } from '@zaatar-tech/voltix';
 
 export const store = createStore({
   count: 0,
@@ -38,7 +38,7 @@ Every key in the initial object becomes part of the store's typed shape. Reading
 `useStoreKey` subscribes to one key and returns its value. The component re-renders only when that key changes.
 
 ```tsx
-import { useStoreKey } from 'voltix';
+import { useStoreKey } from '@zaatar-tech/voltix';
 import { store } from './store';
 
 function Count() {
@@ -52,7 +52,7 @@ function Count() {
 For more than one key, `useStoreSelector` takes an array of keys and returns just those keys. The component re-renders when any of them changes.
 
 ```tsx
-import { useStoreSelector } from 'voltix';
+import { useStoreSelector } from '@zaatar-tech/voltix';
 import { store } from './store';
 
 function Status() {
@@ -68,7 +68,7 @@ The selector is always an array: key strings, plus `{ key: compareFn }` entries 
 `createStoreHook` binds the store into a hook once, so components stop passing it around. Types are inferred from the store.
 
 ```tsx
-import { createStoreHook } from 'voltix';
+import { createStoreHook } from '@zaatar-tech/voltix';
 import { store } from './store';
 
 export const useCounter = createStoreHook(store);
@@ -82,7 +82,7 @@ function Controls() {
 ## A complete counter
 
 ```tsx
-import { createStore, useStoreKey } from 'voltix';
+import { createStore, useStoreKey } from '@zaatar-tech/voltix';
 
 const store = createStore({ count: 0 });
 

@@ -20,7 +20,7 @@ A store is a flat object of keys, created once at module scope. No provider, no 
 
 ```tsx
 // ui.ts
-import { createStore } from 'voltix';
+import { createStore } from '@zaatar-tech/voltix';
 
 export type Filter = 'all' | 'open' | 'done';
 
@@ -33,7 +33,7 @@ export const ui = createStore({
 Read one key with `useStoreKey`. It returns the value itself.
 
 ```tsx
-import { useStoreKey } from 'voltix';
+import { useStoreKey } from '@zaatar-tech/voltix';
 import { ui } from './ui';
 
 function SearchBox() {
@@ -70,7 +70,7 @@ ui.setKey('filter', 'open');   // logs nothing — same value, no write
 
 ```tsx
 // ui.ts
-import { createStore, createActions } from 'voltix';
+import { createStore, createActions } from '@zaatar-tech/voltix';
 
 export const ui = createStore({ filter: 'all' as Filter, search: '' });
 
@@ -93,7 +93,7 @@ A task has rules (the title), behaviour, and a place to record a rejected write.
 ```tsx
 // task.ts
 import { z } from 'zod';
-import { createStore } from 'voltix';
+import { createStore } from '@zaatar-tech/voltix';
 
 export function makeTask(id: string) {
   const task = createStore(
@@ -129,7 +129,7 @@ The contract runs on every write, and the error handler runs after the write set
 
 ```ts
 // tasks.ts
-import { createLookup, createActions } from 'voltix';
+import { createLookup, createActions } from '@zaatar-tech/voltix';
 import { makeTask } from './task';
 
 export const tasks = createLookup(makeTask);
@@ -152,7 +152,7 @@ Bind the finished stores under one root. A key holding a store is a child; the o
 
 ```ts
 // app.ts
-import { createStore, createActions } from 'voltix';
+import { createStore, createActions } from '@zaatar-tech/voltix';
 import { ui } from './ui';
 import { tasks, taskActions } from './tasks';
 
@@ -220,7 +220,7 @@ app.getKey('count');   // 1, already committed
 Each component subscribes to exactly what it reads.
 
 ```tsx
-import { useStoreKey, useStoreSelector } from 'voltix';
+import { useStoreKey, useStoreSelector } from '@zaatar-tech/voltix';
 import { app, appActions } from './app';
 import { tasks } from './tasks';
 
@@ -292,7 +292,7 @@ useEffect(() => { loadBoard(); }, []);
 Persist preferences; server data reloads from the server. Seed the initial state from storage, then attach `persist`.
 
 ```ts
-import { createStore, persist, loadPersistedState } from 'voltix';
+import { createStore, persist, loadPersistedState } from '@zaatar-tech/voltix';
 
 type UiState = { filter: Filter; search: string };
 

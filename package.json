@@ -1,5 +1,5 @@
 {
-  "name": "voltix",
+  "name": "@zaatar-tech/voltix",
   "version": "1.0.0",
   "description": "Fastest React state library. Per-key subscriptions, 4 KB, zero dependencies.",
   "main": "dist/index.js",

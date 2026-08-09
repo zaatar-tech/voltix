@@ -3,7 +3,7 @@ import Logo from '../Logo';
 import LiveRace from '../components/LiveRace';
 import { hl } from '../hl';
 
-const COUNTER = `import { createStore, useStoreKey } from 'voltix';
+const COUNTER = `import { createStore, useStoreKey } from '@zaatar-tech/voltix';
 
 const store = createStore({ count: 0 });
 const inc = () => store.increment('count');
@@ -26,13 +26,13 @@ function Install() {
       className={'install' + (copied ? ' copied' : '')}
       aria-label={copied ? 'Copied' : 'Copy install command'}
       onClick={() => {
-        navigator.clipboard?.writeText('npm i voltix').catch(() => {});
+        navigator.clipboard?.writeText('npm i @zaatar-tech/voltix').catch(() => {});
         setCopied(true);
         setTimeout(() => setCopied(false), 1300);
       }}
     >
       <span className="p">$</span>
-      <span>npm i voltix</span>
+      <span>npm i @zaatar-tech/voltix</span>
       <span className="c" aria-hidden>
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           {copied ? (

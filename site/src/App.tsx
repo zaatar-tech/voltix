@@ -1,7 +1,7 @@
 import { useLayoutEffect, useSyncExternalStore } from 'react';
 import type { MouseEvent } from 'react';
 import { flushSync } from 'react-dom';
-import { createStore, useStoreKey } from 'voltix';
+import { createStore, useStoreKey } from '@zaatar-tech/voltix';
 import Home from './pages/Home';
 import Docs from './pages/Docs';
 import Logo from './Logo';
@@ -76,7 +76,7 @@ export default function App() {
         <div className="nav-links">
           <a href="#/docs/getting-started">Docs</a>
           <a href="https://github.com/zaatar-tech/voltix" target="_blank" rel="noopener">GitHub</a>
-          <a href="https://www.npmjs.com/package/voltix" target="_blank" rel="noopener">npm</a>
+          <a href="https://www.npmjs.com/package/@zaatar-tech/voltix" target="_blank" rel="noopener">npm</a>
           <button
             className="toggle"
             onClick={(e) => toggleTheme(theme, e)}
