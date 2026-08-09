@@ -1,0 +1,82 @@
+{
+  "name": "voltix",
+  "version": "1.0.0",
+  "description": "Fastest React state library. Per-key subscriptions, 4 KB, zero dependencies.",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./eslint": {
+      "types": "./dist/eslint.d.ts",
+      "import": "./dist/eslint.mjs",
+      "require": "./dist/eslint.js"
+    }
+  },
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zaatar-tech/voltix.git"
+  },
+  "homepage": "https://github.com/zaatar-tech/voltix",
+  "bugs": {
+    "url": "https://github.com/zaatar-tech/voltix/issues"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts src/eslint.ts --format esm,cjs --dts --minify",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "bench": "vitest bench --run",
+    "typecheck": "tsc --noEmit --skipLibCheck",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "voltix",
+    "react",
+    "state",
+    "state-management",
+    "store",
+    "fine-grained",
+    "selector",
+    "hook",
+    "tiny",
+    "fast",
+    "typescript"
+  ],
+  "author": "Ohad Baehr - Zaatar Tech",
+  "license": "MIT",
+  "peerDependencies": {
+    "eslint": ">=9.0.0",
+    "react": ">=18.0.0"
+  },
+  "peerDependenciesMeta": {
+    "eslint": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.2.3",
+    "eslint": "^10.8.0",
+    "jotai": "^2.20.2",
+    "jsdom": "^28.1.0",
+    "nanostores": "^1.4.2",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "tsup": "^8.4.0",
+    "typescript": "^5.8.3",
+    "valtio": "^2.3.2",
+    "vitest": "^4.0.18",
+    "zod": "^4.4.3",
+    "zustand": "^5.0.14"
+  }
+}

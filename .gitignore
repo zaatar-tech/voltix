@@ -1,0 +1,28 @@
+# Build output
+dist/
+*.log
+
+# Benchmark build files
+benchmark/dist/
+benchmark/node_modules/
+
+# Node modules
+node_modules/
+
+# Lockfiles from other package managers (package-lock.json is committed — CI runs `npm ci`)
+yarn.lock
+pnpm-lock.yaml
+
+# IDE / local tooling state — never belongs in the repo
+.vscode/
+.idea/
+.claude/
+.wrangler/
+*.tgz
+
+# Generated at prebuild by site/scripts/prepare.mjs (og.png is NOT — keep it committed)
+site/public/docs/
+site/public/llms.txt
+
+# MacOS/OS junk
+.DS_Store

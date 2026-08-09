@@ -1,0 +1,33 @@
+{
+  "name": "voltix-site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --port 4173",
+    "prebuild": "node scripts/prepare.mjs",
+    "og": "node scripts/og.mjs"
+  },
+  "dependencies": {
+    "highlight.js": "^11.11.1",
+    "jotai": "^2.20.2",
+    "nanostores": "^1.4.2",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-markdown": "^9.0.1",
+    "rehype-highlight": "^7.0.2",
+    "remark-gfm": "^4.0.0",
+    "valtio": "^2.3.2",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^4.3.4",
+    "sharp": "^0.35.3",
+    "typescript": "^5.8.3",
+    "vite": "^6.0.7",
+    "vite-plugin-singlefile": "^2.1.0"
+  }
+}

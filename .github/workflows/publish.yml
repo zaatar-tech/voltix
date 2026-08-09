@@ -1,0 +1,31 @@
+name: Publish
+
+# npm provenance is an attestation signed by the CI runner, so it can only be
+# produced by a publish that runs here rather than on a developer machine.
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write # required — this is what signs the provenance attestation
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+      # `prepare` rebuilds dist before packing, so the published files are built here.
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
