@@ -6,7 +6,7 @@ import { proxy, subscribe as vSubscribe } from 'valtio/vanilla';
 import { atom as nAtom } from 'nanostores';
 import { hl } from '../hl';
 
-type Runner = { key: string; run: (deadline: number) => number };
+type Runner = { key: string; run: (deadline: number, batch: number) => number };
 
 // Each runner drives its own store's update path (with a subscriber attached) as
 // fast as it can for a fixed time slice. The count is real updates completed.
@@ -19,27 +19,15 @@ function makeRunners(): Runner[] {
   const vp = proxy({ n: 0 }); vSubscribe(vp, noop); let px = 0;
   const na = nAtom(0); na.listen(noop); let nx = 0;
 
-  // Batches are sized by time, not op count: a fixed 256-op batch is ~2µs of work
-  // for the fastest store but ~100µs for the slowest, so the per-batch clock check
-  // taxes the fastest hardest. Each runner tunes its batch toward ~120µs (kept
-  // across calls), making the check the same fraction of work for every library.
-  const TARGET_US = 120;
-  const slice = (fn: () => void) => {
-    let batch = 256;
-    return (deadline: number) => {
-      let c = 0;
-      do {
-        const b0 = performance.now();
-        for (let k = 0; k < batch; k++) fn();
-        c += batch;
-        const us = (performance.now() - b0) * 1000;
-        if (us > 0) {
-          const scaled = Math.round(batch * (TARGET_US / us));
-          batch = Math.max(64, Math.min(1 << 20, (scaled + batch) >> 1));
-        }
-      } while (performance.now() < deadline);
-      return c;
-    };
+  // The caller sizes the batch (see TARGET_S) so a batch is a fixed slice of *time*
+  // rather than a fixed op count: 256 ops is ~2µs of work for the fastest store and
+  // ~100µs for the slowest, which would make the loop's clock check tax the fastest
+  // hardest. Timing each batch here instead would break on Safari, whose clock is
+  // quantized to 1ms and reads a short batch as 0.
+  const slice = (fn: () => void) => (deadline: number, batch: number) => {
+    let c = 0;
+    do { for (let k = 0; k < batch; k++) fn(); c += batch; } while (performance.now() < deadline);
+    return c;
   };
 
   return [
@@ -75,20 +63,27 @@ const update = {
   nanostores: () => s.set(++i),
 };
 
-// run one store's update for a fixed slice, count the ops.
-// the batch grows toward ~120µs of work, so the clock check
-// costs every library the same fraction of its time
-function measure(run, ms) {
-  const end = performance.now() + ms;
-  let ops = 0, batch = 256;
-  do {
-    const t0 = performance.now();
-    for (let k = 0; k < batch; k++) run();
-    ops += batch;
-    const us = (performance.now() - t0) * 1000;
-    batch = Math.max(64, Math.round(batch * (120 / Math.max(us, 1))));
-  } while (performance.now() < end);
-  return ops / (ms / 1000); // updates per second
+// run one store's update for a fixed slice, count the ops
+function measure(run, ms, batch) {
+  const t0 = performance.now();
+  let ops = 0;
+  do { for (let k = 0; k < batch; k++) run(); ops += batch; }
+  while (performance.now() < t0 + ms);
+  // the loop finishes the batch it is in, so it runs past ms;
+  // divide by the time that actually elapsed, not by ms
+  return { ops, elapsed: performance.now() - t0 };
+}
+
+// batch is sized from the measured rate to be ~120us of work, so
+// the loop's clock check costs every library the same fraction of
+// its time. timing each batch instead would read 0 on Safari,
+// whose clock is quantized to 1ms.
+let batch = 256;
+function tick(run) {
+  const { ops, elapsed } = measure(run, 1.2, batch);
+  const rate = ops / (elapsed / 1000); // updates per second
+  batch = Math.max(64, Math.round(rate * 120e-6));
+  return rate;
 }`;
 
 // Split magnitude from unit so they align in their own columns — a right-aligned
@@ -107,6 +102,7 @@ export default function LiveRace() {
   // a ratio of sums, not a smoothed ratio, so one noisy slice can't spike it.
   const opsRef = useRef<number[]>(runners.map(() => 0));
   const timeRef = useRef<number[]>(runners.map(() => 0));
+  const batchRef = useRef<number[]>(runners.map(() => 256));
   const warmedRef = useRef(false);
 
   const [rows, setRows] = useState(() => runners.map((r) => ({ key: r.key, ops: 0 })));
@@ -124,12 +120,14 @@ export default function LiveRace() {
                                // so genuine slices are never mistaken for stalls.
     const ops = opsRef.current;
     const time = timeRef.current;
+    const batch = batchRef.current;
+    const TARGET_S = 120e-6; // work per batch, in seconds
 
     // Warm every library to steady-state JIT once, up front, so the first number
     // shown reflects optimized code rather than a cold-compile ramp. Same budget
     // for each, so no library is measured at an advantage.
     if (!warmedRef.current) {
-      for (let i = 0; i < runners.length; i++) runners[i].run(performance.now() + 50);
+      for (let i = 0; i < runners.length; i++) runners[i].run(performance.now() + 50, batch[i]);
       warmedRef.current = true;
     }
 
@@ -146,13 +144,15 @@ export default function LiveRace() {
       const decay = Math.exp(-dt / TAU);
       for (let i = 0; i < runners.length; i++) {
         const t0 = performance.now();
-        const c = runners[i].run(t0 + SLICE);
+        const c = runners[i].run(t0 + SLICE, batch[i]);
         const el = performance.now() - t0;
         // Accept clean slices only; the `time === 0` clause always primes the very
         // first sample so a slow cold start can never leave the row stuck at zero.
         if (el > 0 && (el <= REJECT || time[i] === 0)) {
           ops[i] = ops[i] * decay + c;
           time[i] = time[i] * decay + el;
+          const rate = ops[i] / (time[i] / 1000);
+          batch[i] = Math.max(64, Math.min(1 << 20, Math.round(rate * TARGET_S)));
         }
       }
       setRows(runners.map((r, i) => ({ key: r.key, ops: time[i] > 0 ? ops[i] / (time[i] / 1000) : 0 })));
