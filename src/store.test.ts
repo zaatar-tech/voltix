@@ -962,6 +962,21 @@ describe('persistence', () => {
       expect(out).toEqual({ theme: 'dark', filters: { open: true, page: 2 } })
     })
 
+    it('round-trips a key written to undefined', () => {
+      const storage = createMockStorage()
+      const store = createStore({ value: 'seed' as string | undefined })
+      persist<{ value: string | undefined }>(store, storage, 'u', ['value'])
+
+      store.setKey('value', undefined)
+      // JSON.stringify(undefined) is undefined, which setItem would store as the
+      // string "undefined" and JSON.parse would then throw on.
+      expect(storage.data.get('u:value')).not.toBe('undefined')
+
+      const out = loadPersistedState<{ value: string | undefined }>(storage, 'u', ['value'])
+      expect('value' in out).toBe(true)
+      expect(out.value).toBeUndefined()
+    })
+
     it('round-trips a user object that contains the tag key itself', () => {
       const storage = createMockStorage()
       const weird = { $$voltix: 'gotcha', ok: true }

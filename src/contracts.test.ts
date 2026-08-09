@@ -264,28 +264,86 @@ describe('initial state is validated', () => {
   });
 });
 
-describe('undefined is never stored', () => {
-  it('set() skips keys whose value is undefined, without notifying', () => {
-    const store = createStore({ count: 1, name: 'a' });
+describe('undefined is a value like any other', () => {
+  it('every write path moves a key to undefined and notifies once', () => {
+    const paths: [string, (s: any) => void][] = [
+      ['setKey', (s) => s.setKey('value', undefined)],
+      ['set', (s) => s.set({ value: undefined })],
+      ['update', (s) => s.update('value', () => undefined)],
+      ['mergeSet-sibling', (s) => s.set({ value: undefined })],
+      ['batch', (s) => s.batch(() => s.setKey('value', undefined))],
+    ];
+    for (const [label, apply] of paths) {
+      const store = createStore({ value: 'seed' as string | undefined });
+      const listener = vi.fn();
+      store.subscribe(['value'], listener);
+      apply(store);
+      expect(store.getKey('value'), label).toBeUndefined();
+      expect(listener, label).toHaveBeenCalledOnce();
+    }
+  });
+
+  it('reset restores a key whose initial value is undefined', () => {
+    const store = createStore({ value: undefined as string | undefined });
+    store.setKey('value', 'typed');
+    expect(store.getKey('value')).toBe('typed');
+    store.reset(['value']);
+    expect(store.getKey('value')).toBeUndefined();
+  });
+
+  it('a spread that omits a key leaves it untouched and notifies nobody', () => {
+    const store = createStore({ a: 1, b: 2 });
     const listener = vi.fn();
-    store.subscribe(['count'], listener);
-    store.set({ count: undefined, name: 'b' });
-    expect(store.getKey('count')).toBe(1);
-    expect(store.getKey('name')).toBe('b');
+    store.subscribe(['a'], listener);
+    store.subscribe(['b'], listener);
+    store.set({ ...{} });
+    expect(store.get()).toEqual({ a: 1, b: 2 });
     expect(listener).not.toHaveBeenCalled();
   });
 
-  it('setKey with undefined is a no-op, even on an optionally-typed key', () => {
-    const store = createStore({ v: 1 as number | undefined });
-    store.setKey('v', undefined);
-    expect(store.getKey('v')).toBe(1);
+  it('a key written literally as undefined is committed', () => {
+    const store = createStore({ a: 1, name: 'a' as string | undefined });
+    store.set({ name: undefined });
+    expect(store.getKey('name')).toBeUndefined();
+    expect(store.getKey('a')).toBe(1);
   });
 
-  it('warns in dev when an initial value is undefined', () => {
+  it('other falsy values still commit and notify', () => {
+    for (const value of ['', 0, false, null]) {
+      const store = createStore({ value: 'seed' as unknown });
+      const listener = vi.fn();
+      store.subscribe(['value'], listener);
+      store.setKey('value', value);
+      expect(store.getKey('value'), String(value)).toBe(value);
+      expect(listener, String(value)).toHaveBeenCalledOnce();
+    }
+  });
+
+  it('writing undefined twice notifies once', () => {
+    const store = createStore({ value: 'seed' as string | undefined });
+    const listener = vi.fn();
+    store.subscribe(['value'], listener);
+    store.setKey('value', undefined);
+    store.setKey('value', undefined);
+    expect(listener).toHaveBeenCalledOnce();
+  });
+
+  it('a per-key equals receives undefined on either side', () => {
+    const seen: unknown[][] = [];
+    const store = createStore(
+      { value: 'seed' as string | undefined },
+      { equals: { value: (prev, next) => { seen.push([prev, next]); return false; } } }
+    );
+    store.setKey('value', undefined);
+    store.setKey('value', 'back');
+    expect(seen).toEqual([['seed', undefined], [undefined, 'back']]);
+  });
+
+  it('does not warn when an initial value is undefined', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     createStore({ data: undefined as { id: number } | undefined });
-    expect(warn).toHaveBeenCalledOnce();
-    expect(warn.mock.calls[0][0]).toContain('use null');
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 });
 

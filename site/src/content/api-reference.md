@@ -21,7 +21,7 @@ Contents:
 - [`createStoreHook`](#createstorehook)
 - [Helpers](#helpers): [`merge`](#merge-helper) · [`persist`](#persist) · [`loadPersistedState`](#loadpersistedstate)
 - [Storage interfaces](#storage-interfaces)
-- [ESLint plugin](#eslint-plugin-voltixeslint)
+- [ESLint plugin](#eslint-plugin-zaatar-techvoltixeslint)
 
 ---
 
@@ -387,10 +387,12 @@ Writes several keys in one update. Only the keys whose value actually changed no
 store.set({ count: 5, name: 'Bob' });
 ```
 
-**`undefined` is never stored.** A key whose value is `undefined` is skipped, so spreading a partial from an API response can't blank out state that the response omitted. Model absence with `null`.
+**Only the keys you pass are written.** A key absent from the partial is left alone, so spreading a patch cannot blank out state it doesn't mention. A key you do pass is written, including when its value is `undefined`.
 
 ```tsx
-store.set({ count: undefined, name: 'Bob' }); // count untouched, name written
+store.set({ name: 'Bob' });            // count untouched, name written
+store.set({ count: undefined });       // count written as undefined, and notifies
+store.set({ ...maybeEmpty });          // absent keys stay absent
 ```
 
 ### `setKey`
@@ -399,7 +401,7 @@ store.set({ count: undefined, name: 'Bob' }); // count untouched, name written
 setKey<K extends keyof T>(key: K, value: T[K]): void
 ```
 
-Sets a single key. Equivalent to `set({ [key]: value })` for one key, on a faster path. Writing `undefined` is a no-op — use `null` for absence.
+Sets a single key. Equivalent to `set({ [key]: value })` for one key, on a faster path. `undefined` is a value like any other here: it commits and notifies.
 
 ```tsx
 store.setKey('count', 5);

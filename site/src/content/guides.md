@@ -141,12 +141,17 @@ form.getKey('email'); // 'ada@example.com'
 
 Validation is synchronous, so keep schemas to shape and range checks. Anything async (a uniqueness check against a server) belongs in the action that performs the request, before it writes.
 
-Voltix never stores `undefined`; use `null` for an absent value. `null` also survives [persistence](#persistence), where JSON drops `undefined` entirely.
+A key typed `T | undefined` can hold `undefined`, and writing it commits and notifies like any other value. `null` and `undefined` are both fine, so pick whichever your types already use and make the schema match:
 
 ```tsx
 const session = createStore(
   { user: null as { id: string } | null },
   { schema: { user: z.object({ id: z.string() }).nullable() } }
+);
+
+const draft = createStore(
+  { title: undefined as string | undefined },
+  { schema: { title: z.string().min(1).optional() } }
 );
 ```
 
@@ -261,6 +266,13 @@ persist<State>(store, localStorage, 'myapp', ['theme', 'isLoggedIn']);
 store.setKey('theme', 'dark'); // persisted immediately
 ```
 
+A key you write as `undefined` persists as `undefined` and comes back that way, so it overrides the default it is spread over rather than falling back to it. Guard the seed if a cleared key should return to its default:
+
+```tsx
+const persisted = loadPersistedState<State>(localStorage, 'myapp', ['theme']);
+if (persisted.theme === undefined) delete persisted.theme;
+```
+
 ### Async storage (React Native `AsyncStorage`)
 
 `loadPersistedState` returns a `Promise` for async storage. Create the store with defaults, start persisting, then hydrate when the read resolves:
@@ -284,7 +296,7 @@ Async writes are fire-and-forget, so state updates are never blocked by a slow w
 
 ### What survives storage
 
-The default format is JSON plus the common non-JSON types: `Date`, `Map`, and `Set` come back as what they were, nesting included. `undefined` is dropped, same as the store rule: use `null`. Values persisted by older versions (plain JSON) load unchanged.
+The default format is JSON plus the common non-JSON types: `Date`, `Map`, `Set`, and `undefined` come back as what they were, nesting included. Values persisted by older versions (plain JSON) load unchanged.
 
 ```ts
 const filters = createStore({ tags: new Set<string>(), since: new Date(0) });

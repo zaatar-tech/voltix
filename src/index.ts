@@ -297,13 +297,6 @@ class Voltix<T extends object> implements StoreType<T> {
       }
     }
 
-    if (__DEV__) {
-      for (const key in initialState) {
-        if (initialState[key] === undefined) {
-          console.warn(`[voltix] initial value for "${key}" is undefined — undefined is never stored; use null to model absence.`);
-        }
-      }
-    }
   }
 
   /** @internal — exposes the equality registry to the selector hook. */
@@ -329,7 +322,6 @@ class Voltix<T extends object> implements StoreType<T> {
   }
 
   private applySingleKey<K extends keyof T>(key: K, value: T[K]): void {
-    if (value === undefined) return; // undefined is never stored — model absence with null
     const schemaReg = this.schemaRegistry;
     if (schemaReg !== null) {
       const std = schemaReg[key as string];
@@ -473,7 +465,6 @@ class Voltix<T extends object> implements StoreType<T> {
       const typedKey = key as keyof T;
       const prevValue = state[typedKey];
       let nextValue = processedUpdate[typedKey];
-      if (nextValue === undefined) continue; // undefined is never stored — use null
       if (schemaRegistry !== null) {
         const std = schemaRegistry[key];
         if (std) {
@@ -1202,6 +1193,7 @@ function isThenable(value: unknown): value is Promise<unknown> {
 const PERSIST_TAG = '$$voltix';
 
 function encodePersistedValue(value: unknown): unknown {
+  if (value === undefined) return { [PERSIST_TAG]: 'undef' };
   if (value instanceof Date) return { [PERSIST_TAG]: 'date', v: value.getTime() };
   if (value instanceof Map) {
     return { [PERSIST_TAG]: 'map', v: Array.from(value, ([k, v]) => [encodePersistedValue(k), encodePersistedValue(v)]) };
@@ -1235,6 +1227,7 @@ function decodePersistedValue(value: unknown): unknown {
         case 'map': return new Map((v as [unknown, unknown][]).map(([k, val]) => [decodePersistedValue(k), decodePersistedValue(val)]));
         case 'set': return new Set((v as unknown[]).map(decodePersistedValue));
         case 'num': return Number(v);
+        case 'undef': return undefined;
         case 'obj': return decodePersistedValue(v);
       }
     }
