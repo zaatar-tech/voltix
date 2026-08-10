@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { Suspense, lazy, useState } from 'react';
 import Logo from '../Logo';
-import LiveRace from '../components/LiveRace';
+// Loaded on demand: it carries Zustand, Jotai, Valtio and nanostores, which no
+// other page needs. Prerendering emits the fallback and the client swaps it in.
+const LiveRace = lazy(() => import('../components/LiveRace'));
 import { hl } from '../hl';
 
 const COUNTER = `import { createStore, useStoreKey } from '@zaatar-tech/voltix';
@@ -74,7 +76,9 @@ export default function Home() {
         <section className="section">
           <h2>Live throughput</h2>
           <p className="lead">Five stores, same increment, running right now in your browser. Voltix leads because its update path mutates one field and notifies one key.</p>
-          <LiveRace />
+          <Suspense fallback={<div className="race" />}>
+            <LiveRace />
+          </Suspense>
         </section>
       </div>
 

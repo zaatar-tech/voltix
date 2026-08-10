@@ -3,7 +3,10 @@ import type { MouseEvent, ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import rehypeHighlight from 'rehype-highlight';
+import { createLowlight } from 'lowlight';
+import tsGrammar from 'highlight.js/lib/languages/typescript';
+import jsGrammar from 'highlight.js/lib/languages/javascript';
+import bashGrammar from 'highlight.js/lib/languages/bash';
 import gettingStarted from '../content/getting-started.md?raw';
 import walkthrough from '../content/walkthrough.md?raw';
 import coreConcepts from '../content/core-concepts.md?raw';
@@ -13,10 +16,34 @@ import guides from '../content/guides.md?raw';
 import patterns from '../content/patterns.md?raw';
 import comparison from '../content/comparison.md?raw';
 
-// ```tsx / ```ts / ```jsx fences reuse highlight.js's typescript/javascript grammars.
-const highlight: Parameters<typeof rehypeHighlight>[0] = {
-  aliases: { typescript: ['tsx', 'ts'], javascript: ['jsx'] },
-};
+// rehype-highlight always bundles lowlight's `common`, which is every language it
+// ships (166 KB). The docs only ever use three, so register those directly and walk
+// the tree here instead.
+const lowlight = createLowlight();
+lowlight.register({ typescript: tsGrammar, javascript: jsGrammar, bash: bashGrammar });
+lowlight.registerAlias({ typescript: ['tsx', 'ts'], javascript: ['jsx'] });
+
+type HastNode = { type: string; tagName?: string; value?: string; properties?: Record<string, unknown>; children?: HastNode[] };
+
+function rehypeHighlightMinimal() {
+  return (tree: HastNode) => {
+    const walk = (node: HastNode, parent: HastNode | null) => {
+      if (node.tagName === 'code' && parent?.tagName === 'pre') {
+        const classes = (node.properties?.className as string[] | undefined) ?? [];
+        const marker = classes.find((c) => c.startsWith('language-'));
+        const lang = marker?.slice('language-'.length);
+        if (lang && lowlight.registered(lang)) {
+          const source = (node.children ?? []).map((c) => c.value ?? '').join('');
+          node.children = lowlight.highlight(lang, source).children as HastNode[];
+          node.properties = { ...node.properties, className: [...classes, 'hljs'] };
+        }
+        return;
+      }
+      for (const child of node.children ?? []) walk(child, node);
+    };
+    walk(tree, null);
+  };
+}
 
 // GitHub-style heading slug: lowercase, drop punctuation, spaces→hyphens (no
 // collapsing), so heading ids match the `#anchor` links and the sub-nav.
@@ -284,7 +311,7 @@ export default function Docs({ page }: { page: string }) {
         <article className="content">
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
-            rehypePlugins={[[rehypeHighlight, highlight]]}
+            rehypePlugins={[rehypeHighlightMinimal]}
             components={components}
           >
             {doc.md}
