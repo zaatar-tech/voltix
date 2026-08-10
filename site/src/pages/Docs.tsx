@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { MouseEvent, ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
@@ -72,28 +72,23 @@ function isPlainClick(event: MouseEvent): boolean {
  */
 const readingLine = () => Math.max(96, window.innerHeight * 0.5);
 
-// Markdown link/heading renderers, bound to the doc currently in view so that a
-// bare `#section` link stays inside `#/docs/<page>` instead of nuking the route.
-// Same-page section links scroll directly rather than round-tripping the router.
-function makeComponents(page: string, goToSection: (slug: string) => boolean): Components {
+// Markdown link renderer: a sibling `foo.md` is another docs route, and a bare
+// `#section` stays a fragment on this page and scrolls without a router round trip.
+function makeComponents(goToSection: (slug: string) => boolean): Components {
   return {
     a({ href = '', children, node, ...rest }) {
       let to = href;
       const md = href.match(/^\.?\/?([\w-]+)\.md(#[\w-]+)?$/);
-      if (md) {
-        to = `#/docs/${md[1]}${md[2] || ''}`;
-      } else if (href.startsWith('#') && !href.startsWith('#/')) {
-        to = `#/docs/${page}${href}`;
-      }
+      if (md) to = `/docs/${md[1]}${md[2] || ''}`;
       const external = /^https?:/.test(to);
-      const samePage = to.match(/^#\/docs\/([\w-]+)#([\w-]+)$/);
+      const samePageSection = to.startsWith('#') ? to.slice(1) : null;
       return (
         <a
           href={to}
           {...(external ? { target: '_blank', rel: 'noopener' } : {})}
           onClick={(event) => {
-            if (!samePage || samePage[1] !== page || !isPlainClick(event)) return;
-            if (goToSection(samePage[2])) event.preventDefault();
+            if (!samePageSection || !isPlainClick(event)) return;
+            if (goToSection(samePageSection)) event.preventDefault();
           }}
           {...rest}
         >
@@ -109,7 +104,22 @@ function makeComponents(page: string, goToSection: (slug: string) => boolean): C
   };
 }
 
-export default function Docs({ page, section }: { page: string; section?: string }) {
+// The section lives in the fragment. Only real navigation (a link, back/forward)
+// fires hashchange — the scroll spy writes with replaceState, so its own updates
+// never come back round as a navigation.
+function useSection(): string | undefined {
+  return useSyncExternalStore(
+    (cb) => {
+      window.addEventListener('hashchange', cb);
+      return () => window.removeEventListener('hashchange', cb);
+    },
+    () => window.location.hash.slice(1) || undefined,
+    () => undefined
+  );
+}
+
+export default function Docs({ page }: { page: string }) {
+  const section = useSection();
   const found = DOCS.findIndex((d) => d.id === page);
   const idx = found < 0 ? 0 : found;
   const doc = DOCS[idx];
@@ -119,12 +129,6 @@ export default function Docs({ page, section }: { page: string; section?: string
   const [activeSection, setActiveSection] = useState<string | undefined>(section);
   const sidebarRef = useRef<HTMLDivElement>(null);
 
-  // The exact hash this component last wrote itself (scroll spy or a section click).
-  // The hash router reads location.hash back on later renders and re-delivers it as
-  // a prop; recognizing our own writes is what keeps that echo from being treated as
-  // a navigation (which would scrollIntoView and yank the page mid-read).
-  const selfWrittenHash = useRef<string | null>(null);
-
   // A deliberately chosen section (link click or deep link) holds against the spy
   // until the reader scrolls away. Without this, a target near the page bottom can
   // never reach the reading line, and the bottom-of-page rule would immediately
@@ -132,22 +136,18 @@ export default function Docs({ page, section }: { page: string; section?: string
   const pinned = useRef<{ slug: string; y: number } | null>(null);
 
   const writeUrl = useCallback((slug: string | undefined) => {
-    const url = slug ? `#/docs/${doc.id}#${slug}` : `#/docs/${doc.id}`;
-    if (window.location.hash === url) return;
-    selfWrittenHash.current = url;
-    // replaceState: section changes while reading must not pile up in history —
-    // back should leave the page, and it never fires hashchange, so the router
-    // only ever sees this URL passively.
+    const url = slug ? `#${slug}` : window.location.pathname;
+    if (slug ? window.location.hash === url : !window.location.hash) return;
+    // replaceState: sections passing by while reading must not pile up in history,
+    // and it fires no hashchange, so the spy never re-enters as a navigation.
     history.replaceState(null, '', url);
-  }, [doc.id]);
+  }, []);
 
   // Navigation (initial load, a link to another page, back/forward): scroll to the
   // deep-linked section or the top, and seed the highlight. Runs for REAL navigations
   // only — if the hash is one we wrote ourselves, the page is already where the
   // reader put it, and doing nothing is the correct move.
   useEffect(() => {
-    if (window.location.hash === selfWrittenHash.current) return;
-    selfWrittenHash.current = null;
     setActiveSection(section);
     pinned.current = null;
     // Instant on purpose: a bare scrollIntoView() inherits CSS `scroll-behavior:
@@ -242,7 +242,7 @@ export default function Docs({ page, section }: { page: string; section?: string
     }
   }, [activeSection]);
 
-  const components = useMemo(() => makeComponents(doc.id, goToSection), [doc.id, goToSection]);
+  const components = useMemo(() => makeComponents(goToSection), [goToSection]);
 
   return (
     <div className="wrap">
@@ -252,7 +252,7 @@ export default function Docs({ page, section }: { page: string; section?: string
             <div className="slabel">Documentation</div>
             {DOCS.map((d) => (
               <div className="nav-item" key={d.id}>
-                <a className={d.id === doc.id ? 'active' : ''} href={`#/docs/${d.id}`}>
+                <a className={d.id === doc.id ? 'active' : ''} href={`/docs/${d.id}`}>
                   {d.title}
                 </a>
                 {d.id === doc.id && d.sections.length > 0 && (
@@ -262,7 +262,7 @@ export default function Docs({ page, section }: { page: string; section?: string
                         key={s.slug}
                         data-slug={s.slug}
                         className={activeSection === s.slug ? 'active' : ''}
-                        href={`#/docs/${d.id}#${s.slug}`}
+                        href={`#${s.slug}`}
                         onClick={(event) => {
                           if (!isPlainClick(event)) return;
                           if (goToSection(s.slug)) event.preventDefault();
@@ -291,10 +291,10 @@ export default function Docs({ page, section }: { page: string; section?: string
           </ReactMarkdown>
           <div className="doc-nav">
             {prev ? (
-              <a href={`#/docs/${prev.id}`}><small>Previous</small>{prev.title}</a>
+              <a href={`/docs/${prev.id}`}><small>Previous</small>{prev.title}</a>
             ) : <span />}
             {next ? (
-              <a className="next" href={`#/docs/${next.id}`}><small>Next</small>{next.title}</a>
+              <a className="next" href={`/docs/${next.id}`}><small>Next</small>{next.title}</a>
             ) : <span />}
           </div>
         </article>

@@ -61,7 +61,7 @@ export default function Home() {
         </h1>
         <Install />
         <div className="cta">
-          <a className="btn primary" href="#/docs/getting-started">Get started</a>
+          <a className="btn primary" href="/docs/getting-started">Get started</a>
           <a className="btn ghost" href="https://github.com/zaatar-tech/voltix" target="_blank" rel="noopener">GitHub</a>
         </div>
       </header>
