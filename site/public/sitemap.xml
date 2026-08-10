@@ -1,4 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://voltix.pages.dev/</loc></url>
+  <url><loc>https://voltix.pages.dev/llms.txt</loc></url>
+  <url><loc>https://voltix.pages.dev/docs/getting-started.md</loc></url>
+  <url><loc>https://voltix.pages.dev/docs/walkthrough.md</loc></url>
+  <url><loc>https://voltix.pages.dev/docs/core-concepts.md</loc></url>
+  <url><loc>https://voltix.pages.dev/docs/composition.md</loc></url>
+  <url><loc>https://voltix.pages.dev/docs/api-reference.md</loc></url>
+  <url><loc>https://voltix.pages.dev/docs/guides.md</loc></url>
+  <url><loc>https://voltix.pages.dev/docs/patterns.md</loc></url>
+  <url><loc>https://voltix.pages.dev/docs/comparison.md</loc></url>
 </urlset>

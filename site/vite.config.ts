@@ -1,6 +1,5 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { viteSingleFile } from 'vite-plugin-singlefile';
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -22,7 +21,7 @@ function ogCacheBust() {
 
 // The site dogfoods voltix by aliasing the bare import to the library source.
 export default defineConfig({
-  plugins: [react(), viteSingleFile(), ogCacheBust()],
+  plugins: [react(), ogCacheBust()],
   resolve: {
     alias: {
       '@zaatar-tech/voltix': fileURLToPath(new URL('../src/index.ts', import.meta.url)),
