@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://voltix.pages.dev/</loc></url>
-  <url><loc>https://voltix.pages.dev/docs/getting-started</loc></url>
-  <url><loc>https://voltix.pages.dev/docs/walkthrough</loc></url>
-  <url><loc>https://voltix.pages.dev/docs/core-concepts</loc></url>
-  <url><loc>https://voltix.pages.dev/docs/composition</loc></url>
-  <url><loc>https://voltix.pages.dev/docs/api-reference</loc></url>
-  <url><loc>https://voltix.pages.dev/docs/guides</loc></url>
-  <url><loc>https://voltix.pages.dev/docs/patterns</loc></url>
-  <url><loc>https://voltix.pages.dev/docs/comparison</loc></url>
-  <url><loc>https://voltix.pages.dev/llms.txt</loc></url>
+  <url><loc>https://voltix.pages.dev/</loc><lastmod>2026-08-10</lastmod></url>
+  <url><loc>https://voltix.pages.dev/docs/getting-started</loc><lastmod>2026-08-10</lastmod></url>
+  <url><loc>https://voltix.pages.dev/docs/walkthrough</loc><lastmod>2026-08-10</lastmod></url>
+  <url><loc>https://voltix.pages.dev/docs/core-concepts</loc><lastmod>2026-08-10</lastmod></url>
+  <url><loc>https://voltix.pages.dev/docs/composition</loc><lastmod>2026-08-10</lastmod></url>
+  <url><loc>https://voltix.pages.dev/docs/api-reference</loc><lastmod>2026-08-10</lastmod></url>
+  <url><loc>https://voltix.pages.dev/docs/guides</loc><lastmod>2026-08-10</lastmod></url>
+  <url><loc>https://voltix.pages.dev/docs/patterns</loc><lastmod>2026-08-10</lastmod></url>
+  <url><loc>https://voltix.pages.dev/docs/comparison</loc><lastmod>2026-08-10</lastmod></url>
+  <url><loc>https://voltix.pages.dev/llms.txt</loc><lastmod>2026-08-10</lastmod></url>
 </urlset>

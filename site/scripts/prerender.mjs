@@ -49,4 +49,16 @@ for (const [path, title, description] of routes) {
   await writeFile(file, html);
 }
 
-console.log(`prerendered ${routes.length} routes`);
+// Without this, Pages answers any unmatched path with index.html and a 200, so
+// every mistyped URL looks like a real page to a crawler.
+const notFound = template
+  .replace('<title>Voltix</title>', '<title>Not found — Voltix</title>')
+  .replace(/<link rel="canonical"[^>]*>\n?\s*/, '')
+  .replace('<div id="root"></div>', `<div id="root"><nav class="nav"><a class="brand" href="/">Voltix</a></nav>
+    <main><div class="wrap"><div class="docs"><article class="content">
+      <h1>Not found</h1>
+      <p>That page does not exist. Try the <a href="/docs/getting-started">documentation</a> or the <a href="/">home page</a>.</p>
+    </article></div></div></main></div>`);
+await writeFile(`${root}dist/404.html`, notFound);
+
+console.log(`prerendered ${routes.length} routes + 404`);

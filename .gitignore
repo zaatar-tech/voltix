@@ -24,6 +24,7 @@ pnpm-lock.yaml
 # Generated at prebuild by site/scripts/prepare.mjs (og.png is NOT — keep it committed)
 site/public/docs/
 site/public/llms.txt
+site/public/sitemap.xml
 
 google*.html
 site/public/_redirects

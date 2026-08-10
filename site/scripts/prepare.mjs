@@ -41,4 +41,13 @@ const llms = repoLinks(await readFile(`${repo}README.md`, 'utf8'))
   .replace(/\n{3,}/g, '\n\n');
 
 await writeFile(`${root}public/llms.txt`, llms);
-console.log(`public/docs (${PAGES.length} pages) + llms.txt (${llms.length} bytes) written`);
+// Sitemap lives here so `lastmod` reflects the build rather than whenever the
+// file was last hand-edited.
+const stamp = new Date().toISOString().slice(0, 10);
+const routes = ['https://voltix.pages.dev/', ...PAGES.map((p) => `https://voltix.pages.dev/docs/${p}`), 'https://voltix.pages.dev/llms.txt'];
+await writeFile(`${root}public/sitemap.xml`,
+  '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+  + routes.map((u) => `  <url><loc>${u}</loc><lastmod>${stamp}</lastmod></url>`).join('\n')
+  + '\n</urlset>\n');
+
+console.log(`public/docs (${PAGES.length} pages) + llms.txt + sitemap (${routes.length} urls) written`);
