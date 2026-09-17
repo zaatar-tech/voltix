@@ -1,14 +1,14 @@
 name: Publish
 
-# npm provenance is an attestation signed by the CI runner, so it can only be
-# produced by a publish that runs here rather than on a developer machine.
+# npm trusts this workflow by its filename (trusted publishing), so renaming
+# the file stops releases from publishing.
 on:
   release:
     types: [published]
 
 permissions:
   contents: read
-  id-token: write # required — this is what signs the provenance attestation
+  id-token: write # authenticates the publish with npm and signs the provenance attestation
 
 jobs:
   publish:
@@ -16,10 +16,12 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # Trusted publishing needs npm 11.5.1 or newer, which Node 24 ships.
       - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: 24
           registry-url: https://registry.npmjs.org
+          package-manager-cache: false
 
       - run: npm ci
       - run: npm run typecheck
@@ -29,6 +31,4 @@ jobs:
       - run: npm run size
 
       # `prepare` rebuilds dist before packing, so the published files are built here.
-      - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - run: npm publish

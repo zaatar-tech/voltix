@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.1
+
+Published from GitHub Actions through npm trusted publishing, so npm lists the release workflow as the publisher. No code changes since 2.0.0.
+
 ## 2.0.0
 
 **Breaking: `undefined` is a value like any other.**
