@@ -23,12 +23,21 @@ jobs:
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
 
+      - name: Verify release tag matches package version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          node -e 'const expected = "v" + require("./package.json").version; if (process.env.RELEASE_TAG !== expected) { console.error("Release tag must be " + expected); process.exit(1); }'
+
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
       # `npm ci` already built via prepare, so this checks the size the release
       # is about to ship against the size the docs advertise.
       - run: npm run size
+
+      - name: Review package contents
+        run: npm pack --dry-run --ignore-scripts
 
       # `prepare` rebuilds dist before packing, so the published files are built here.
       - run: npm publish

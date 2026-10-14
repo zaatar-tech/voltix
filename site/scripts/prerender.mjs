@@ -3,7 +3,11 @@
 // client still boots normally and takes over from there.
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { render } from '../dist-ssr/entry-server.js';
+
+// Load React in production mode so Suspense fallbacks never embed development
+// error stacks or local filesystem paths in the published HTML.
+process.env.NODE_ENV = 'production';
+const { render } = await import('../dist-ssr/entry-server.js');
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const SITE = 'https://voltix.pages.dev';

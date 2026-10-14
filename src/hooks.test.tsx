@@ -6,6 +6,7 @@ import {
   useStoreSelector,
   useStoreKey,
   createStoreHook,
+  type StoreType,
 } from './index'
 
 // ---------------------------------------------------------------------------
@@ -272,6 +273,32 @@ describe('edge cases', () => {
 // ---------------------------------------------------------------------------
 // useStoreKey
 // ---------------------------------------------------------------------------
+describe('stores from other libraries', () => {
+  it('useStoreSelector works on a store that has only the public interface', () => {
+    // What a warp row looks like to the hook: the methods, none of voltix's internals.
+    const state = { a: 1, b: 'x' }
+    let listeners: Array<() => void> = []
+    const fake = {
+      get: () => state,
+      getKey: (key: 'a' | 'b') => state[key],
+      subscribe: (_keys: ('a' | 'b')[], fn: () => void) => {
+        listeners.push(fn)
+        return () => {
+          listeners = listeners.filter((l) => l !== fn)
+        }
+      },
+    } as unknown as StoreType<typeof state>
+    const { result } = renderHook(() => useStoreSelector(fake, ['a', 'b']))
+    expect(result.current).toEqual({ a: 1, b: 'x' })
+
+    act(() => {
+      state.a = 2
+      for (const l of listeners) l()
+    })
+    expect(result.current).toEqual({ a: 2, b: 'x' })
+  })
+})
+
 describe('useStoreKey', () => {
   it('returns the key value directly', () => {
     const store = createStore({ count: 5, name: 'x' })

@@ -129,7 +129,7 @@ This runs at write time, so the skipped value never lands and nobody re-renders.
 
 ## Batching
 
-`batch` groups several writes into one notification. Listeners fire once, after the callback ends.
+`batch` groups several writes into one notification per subscription, after the callback ends. Separate subscriptions using the same callback remain independent.
 
 ```tsx
 store.batch(() => {

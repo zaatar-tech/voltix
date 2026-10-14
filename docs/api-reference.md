@@ -466,6 +466,8 @@ reset(keys?: (keyof T)[]): void
 
 Resets keys to the initial state passed at creation. With no argument, resets every key. With an array, resets only those keys. When a key has a transforming [schema](#schema-contracts), the initial state was committed post-transform, and `reset` restores that value.
 
+Stores without child nodes or schemas retain the original input object for resets. Changing its top-level properties after `createStore` changes the values that `reset` restores, so treat that object as immutable. Stores with child nodes or schemas keep a shallow copy of their initial leaf values instead.
+
 ```tsx
 store.reset();          // all keys back to initial
 store.reset(['count']); // only count
@@ -485,7 +487,7 @@ app.select('todos').clear();
 batch(fn: () => void): void
 ```
 
-Runs `fn`, coalescing every write inside it into one notification round. Each affected listener is called once after `fn` returns. Nested `batch` calls join the outer batch. See [batching](./core-concepts.md#batching).
+Runs `fn`, coalescing every write inside it into one notification round. Each affected subscription is notified once after `fn` returns. Separate subscriptions remain independent even if they use the same callback. Nested `batch` calls join the outer batch. See [batching](./core-concepts.md#batching).
 
 ```tsx
 store.batch(() => {
@@ -501,6 +503,8 @@ subscribe(keys: (keyof T)[], listener: () => void): () => void
 ```
 
 Registers a listener for a set of keys and returns an unsubscribe function. The listener runs when any of those keys changes. It receives no arguments; read current values with `getKey` or `get`. For change detection with old and new values, see [`onChange`](#onchange).
+
+Each `subscribe` call registers an independent subscription, even when the same callback or keys are reused. A single `subscribe(['a', 'b'], fn)` runs `fn` once when both keys change in one `set` or `batch`; two separate subscriptions using `fn` run it once per affected subscription. Each unsubscribe removes only its own subscription.
 
 ```tsx
 const off = store.subscribe(['count'], () => {

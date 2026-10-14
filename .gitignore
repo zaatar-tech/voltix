@@ -18,8 +18,23 @@ pnpm-lock.yaml
 .vscode/
 .idea/
 .claude/
+.codex/
 .wrangler/
 *.tgz
+
+# Local environment, credentials, and private keys
+.env
+.env.*
+!.env.example
+!.env.*.example
+.npmrc
+.netrc
+.aws/
+.ssh/
+*.pem
+*.key
+*.p12
+*.pfx
 
 # Generated at prebuild by site/scripts/prepare.mjs (og.png is NOT — keep it committed)
 site/public/docs/

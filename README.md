@@ -6,16 +6,16 @@
 
 [![CI](https://github.com/zaatar-tech/voltix/actions/workflows/ci.yml/badge.svg)](https://github.com/zaatar-tech/voltix/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@zaatar-tech/voltix?color=8b5cf6)](https://www.npmjs.com/package/@zaatar-tech/voltix)
-[![gzip](https://img.shields.io/badge/gzip-4.4%20KB-06b6d4)](https://bundlephobia.com/package/@zaatar-tech/voltix)
+[![gzip](https://img.shields.io/badge/gzip-5.0%20KB-06b6d4)](https://bundlephobia.com/package/@zaatar-tech/voltix)
 [![types](https://img.shields.io/npm/types/@zaatar-tech/voltix?color=3178c6)](https://www.npmjs.com/package/@zaatar-tech/voltix)
 [![license](https://img.shields.io/badge/license-MIT-64748b)](./LICENSE)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-22d3ee)](https://github.com/zaatar-tech/voltix/pulls)
 
-[Website](https://voltix.pages.dev) · [npm](https://www.npmjs.com/package/@zaatar-tech/voltix) · [GitHub](https://github.com/zaatar-tech/voltix) · [Docs](./docs) · [Benchmarks](#benchmarks)
+[Website](https://voltix.zaatar.tech) · [npm](https://www.npmjs.com/package/@zaatar-tech/voltix) · [GitHub](https://github.com/zaatar-tech/voltix) · [Docs](./docs) · [Benchmarks](#benchmarks)
 
 </div>
 
-Voltix is a **~4.4 KB** global store for React with per-key subscriptions: set one field and only the components reading that field re-render. There is no provider to set up and there are no selector functions to write. Stores compose into a tree of nested stores and per-id lookups. Full TypeScript inference, zero dependencies, and the fastest update throughput of any React store we've measured.
+Voltix is a **~5.0 KB** global store for React with per-key subscriptions: set one field and only the components reading that field re-render. There is no provider to set up and there are no selector functions to write. Stores compose into a tree of nested stores and per-id lookups. Full TypeScript inference, zero dependencies, and the fastest update throughput of any React store we've measured.
 
 ```tsx
 import { createStore, useStoreKey } from '@zaatar-tech/voltix';
@@ -37,22 +37,20 @@ function Counter() {
 - **Fully typed, inference-first.** Keys, values, selectors, and equality functions are all inferred from your store. Selecting a key that doesn't exist is a compile error.
 - **Runtime contracts.** Put a zod (or valibot/arktype) schema on a key. Invalid writes are rejected, initial state included, and `onSchemaError` routes failures into your UI. Standard Schema keeps it dependency-free.
 - **Batteries included.** Action helpers, derived keys, write interceptors, persistence (sync + async), and an ESLint rule ship in the box.
-- **Tiny and dependency-free.** ~4.4 KB gzipped, tree-shakeable, `react` as the only peer.
+- **Tiny and dependency-free.** ~5.0 KB gzipped, tree-shakeable, `react` as the only peer.
 
 ## Benchmarks
 
-Update throughput vs the latest Zustand, Jotai, Valtio, and nanostores (vanilla store engine, ops/sec, higher is faster):
+Update throughput vs the latest Preact Signals, Zustand, nanostores, Solid, Valtio, Jotai and Legend-State (vanilla store engines, ops/sec, higher is faster). Each case runs in its own process and reports the median of 40 runs:
 
-| operation | **Voltix** | Zustand | nanostores | Valtio | Jotai |
-|---|---|---|---|---|---|
-| update a value + notify | **43.8M** | 20.1M | 18.8M | 5.3M | 2.5M |
-| functional update (`x => x + 1`) | **41.1M** | 20.1M | 17.1M | 5.1M | 2.1M |
-| fine-grained update (1 of 1000) | **41.6M** | 21.6M † | 18.7M | 56K ‡ | 2.3M |
-| notify 1000 subscribers | **297K** | 164K | 81K | — | 53K |
+| operation | **Voltix** | Preact Signals | Zustand | nanostores | Solid | Valtio | Jotai | Legend-State |
+|---|---|---|---|---|---|---|---|---|
+| update a value + notify | **187.8M** | 47.4M | 39.1M | 31.0M | 13.1M | 6.7M | 2.7M | 2.7M |
+| functional update (`x => x + 1`) | **192.0M** | 49.4M | 37.8M | 30.3M | 13.7M | 6.5M | 2.3M | 2.7M |
+| fine-grained update (1 of 1000) | **184.2M** | 47.9M | 39.1M | 30.4M | 12.5M | 161K | 2.6M | 1.1M |
+| notify 1000 subscribers | **563K** | 35K | 232K | 111K | 24K | — | 64K | 35K |
 
-Run `npm run bench` to reproduce ([`src/vs.bench.ts`](src/vs.bench.ts)). The gap matters under high write rates: drag interactions, streaming data, animation, and large grids of independently updating cells.
-
-<sub>These are store-engine numbers; in React all five re-render only the components whose data changed. On store creation and subscribe/unsubscribe Voltix is mid-pack. † Zustand's fine-grained row uses separate stores; its single-store selector pattern is O(N). ‡ Valtio batches notifications asynchronously and its per-key subscribe is O(N).</sub>
+Run `npm run bench` to reproduce ([`bench/vs.ts`](bench/vs.ts); Node 25, Apple M4 Pro). The gap matters under high write rates: drag interactions, streaming data, animation, and large grids of independently updating cells.
 
 ## Install
 

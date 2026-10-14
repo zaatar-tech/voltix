@@ -28,19 +28,25 @@ For a single field the two behave the same. The difference shows as reads widen:
 | Jotai | An atom in a dependency graph |
 | Valtio | Properties touched on a proxy |
 | nanostores | An individual atom or map |
+| Preact Signals | A signal read inside an effect |
+| Solid | A signal read inside a computation |
+| Legend-State | A node of an observable tree |
 
 ## Performance
 
-Store-engine microbenchmarks (vanilla stores, no React), in operations per second, higher is faster. Reproduce with `npm run bench` against [`src/vs.bench.ts`](https://github.com/zaatar-tech/voltix/blob/main/src/vs.bench.ts).
+Store-engine microbenchmarks (vanilla stores, no React), in operations per second, higher is faster. Each case runs in its own process and reports the median of 40 runs of about 10 ms each (Node 25, Apple M4 Pro). Reproduce with `npm run bench` ([`bench/vs.ts`](https://github.com/zaatar-tech/voltix/blob/main/bench/vs.ts)).
 
-| operation | **Voltix** | Zustand | nanostores | Valtio | Jotai |
-|---|---|---|---|---|---|
-| update a value + notify | **43.8M** | 20.1M | 18.8M | 5.3M | 2.5M |
-| functional update (`x => x + 1`) | **41.1M** | 20.1M | 17.1M | 5.1M | 2.1M |
-| fine-grained update (1 of 1000) | **41.6M** | 21.6M † | 18.7M | 56K ‡ | 2.3M |
-| notify 1000 subscribers | **297K** | 164K | 81K | — | 53K |
+| operation | **Voltix** | Preact Signals | Zustand | nanostores | Solid | Valtio | Jotai | Legend-State |
+|---|---|---|---|---|---|---|---|---|
+| update a value + notify | **187.8M** | 47.4M | 39.1M | 31.0M | 13.1M | 6.7M | 2.7M | 2.7M |
+| functional update (`x => x + 1`) | **192.0M** | 49.4M | 37.8M | 30.3M | 13.7M | 6.5M | 2.3M | 2.7M |
+| fine-grained update (1 of 1000) | **184.2M** | 47.9M | 39.1M † | 30.4M | 12.5M | 161K ‡ | 2.6M | 1.1M |
+| notify 1000 subscribers | **563K** | 35K | 232K | 111K | 24K | — | 64K | 35K |
+| update 50 keys as one transaction | 617K | **820K** | 530K | 516K | 279K | — | 51K | 26K |
+| subscribe + unsubscribe | **44.4M** | 29.1M | 31.4M | 41.7M | 8.9M | 15.5M | 3.1M | 26.5M |
+| create 1,000 units | 42K | **199K** | 39K | 6K | 86K | 388 | 44K | 15K |
 
-<sub>† Zustand's fine-grained row uses separate stores; its single-store selector pattern is O(N) in the number of subscribers. ‡ Valtio batches notifications asynchronously and its per-key subscribe is O(N).</sub>
+<sub>† Zustand's fine-grained row uses separate stores; its single-store selector pattern is O(N) in the number of subscribers. ‡ Valtio batches notifications asynchronously and its per-key subscribe is O(N). The transaction row uses each library's batch where it has one and Voltix's `set`; a signal is a smaller unit than a keyed store, which is what the creation row shows.</sub>
 
 Every library here re-renders only the components whose data changed. The throughput gap shows up under a high rate of writes: drags, streaming data, animation, large grids of independently updating cells.
 

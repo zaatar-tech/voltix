@@ -1,6 +1,7 @@
 import { useMemo, useRef, useSyncExternalStore } from 'react'
 
-type StoreListener = () => void;
+const MULTI_SUBSCRIPTION = Symbol('multi-subscription');
+type StoreListener = (() => void) & { [MULTI_SUBSCRIPTION]?: true };
 
 /**
  * A write interceptor. Runs before an update commits: return a partial to replace
@@ -72,6 +73,29 @@ export interface SchemaError<T extends object = any> {
 // value to commit, or VETO to drop the write for that key. Reporting is delegated to
 // the owning store so a registered handler can take over from the console default.
 const VETO = Symbol('veto');
+
+// Shared, frozen listener table for stores nobody has subscribed to yet. A lookup on it
+// returns undefined like any other miss, so the notify path needs no null check, and a
+// store that never gets a subscriber never allocates a table of its own.
+const NO_LISTENERS: Record<string, never> = Object.freeze(Object.create(null));
+
+/** A copy of a key's listeners that keeps the batch tag, so every listener array has one shape. */
+function copyListeners(fns: Listeners): Listeners {
+  const copy = fns.slice() as Listeners;
+  copy.e = fns.e;
+  return copy;
+}
+
+/** One subscription's slot under one key: its index in that key's listener array. */
+interface Slot {
+  i: number;
+  k: string;
+  s: Slot[];
+}
+
+/** A key's listeners, tagged with the batch that last collected the key, so a batch records each key once. */
+type Listeners = StoreListener[] & { e: number };
+
 function runSchema<V>(std: SchemaProps, key: string, value: V, owner: SchemaReporter): V | typeof VETO {
   let result;
   try {
@@ -107,6 +131,14 @@ interface PendingSchemaError {
   issues: ReadonlyArray<StandardSchemaIssue>;
   value: unknown;
   vendor: string;
+}
+
+/** What a store keeps once schema rejections or their handlers exist. */
+interface SchemaErrorState<T extends object> {
+  handlers: Set<(error: SchemaError<T>) => void> | null;
+  pending: PendingSchemaError[] | null;
+  /** Whether handlers are running, so a handler's own rejected write goes to the console instead. */
+  reporting: boolean;
 }
 
 function logSchemaError(
@@ -171,11 +203,14 @@ export interface StoreType<T extends object> {
   toggle(key: BooleanKeys<T>): void;
   /** Merge a partial into an object key and write the result. */
   mergeSet<K extends keyof T>(key: K, value: T[K] extends object ? Partial<T[K]> : never): void;
-  /** Reset all keys (or the given keys) to the initial state. */
+  /**
+   * Reset all keys (or the given keys) to the initial state. Stores without child
+   * nodes or schemas read from the original input object, which should not be mutated.
+   */
   reset(keys?: (keyof T)[]): void;
-  /** Coalesce many sets inside `fn` into a single notification per listener. */
+  /** Coalesce many sets inside `fn` into a single notification per subscription. */
   batch(fn: () => void): void;
-  /** Subscribe to specific keys. Returns an unsubscribe. */
+  /** Subscribe to specific keys. Each call is independent, even with the same listener. Returns an unsubscribe. */
   subscribe(keys: (keyof T)[], listener: () => void): () => void;
   /** Imperative snapshot of specific keys. */
   pick<K extends keyof T>(keys: K[]): Pick<T, K>;
@@ -219,58 +254,81 @@ type InternalStore<T extends object> = StoreType<T> & {
 class Voltix<T extends object> implements StoreType<T> {
   private state: T;
   private readonly _initialState: T;
-  private readonly keyListeners: Record<string, readonly StoreListener[] | undefined>;
+  private keyListeners: Record<string, Listeners | undefined>;
+  /** Parallel to keyListeners: each key's slot records, in the same order as its listeners. */
+  private keySubs: Record<string, Slot[] | undefined>;
   private equalityRegistry: Record<string, ((prev: any, next: any) => boolean) | undefined> | null;
   private schemaRegistry: Record<string, SchemaProps | undefined> | null;
-  private schemaErrorHandlers: Set<(error: SchemaError<T>) => void> | null;
-  private pendingSchemaErrors: PendingSchemaError[] | null;
-  private reportingSchemaError: boolean;
+  /** Handlers and queued rejections; null until a handler is registered or a write is rejected. */
+  private schemaErrors: SchemaErrorState<T> | null;
   private middleware: Array<{ callback: Interceptor<T>; keys: (keyof T)[] | null }> | null;
-  private batchedKeys: Set<keyof T> | null;
+  /** Keys written inside the open batch that have listeners, each once; null outside a batch. */
+  private batched: string[] | null;
+  /** Counts batches; a key's listener array carries the epoch of the batch that last collected it. */
+  private _epoch: number;
+  /** True while nothing can intervene in a write: no interceptor, schema, equality, or open batch. */
+  private _fast: boolean;
+  /** Live subscriptions that span more than one key; while zero, a multi-key notify needs no dedup. */
+  private _multi: number;
+  /** Notify loops on the stack; while non-zero, a listener array is copied before it changes. */
+  private _notifying: number;
   /** @internal — a real constructor field (not bolted on later) so every store keeps one hidden class. */
   _children: Map<PropertyKey, AnyNode> | null;
 
-  constructor(initialState: T, options?: StoreOptions<T>) {
-    this._initialState = { ...initialState };
-    this.state = { ...initialState };
-    // Listeners are arrays, not Sets: iterating a Set allocates an iterator on
-    // every notify, which only some engines optimize away. Add/remove rebuild
-    // the array (copy-on-write) so a notify already walking one cannot see it
-    // change under it.
-    this.keyListeners = Object.create(null);
-    this.equalityRegistry = null;
-    this.schemaRegistry = null;
-    this.schemaErrorHandlers = null;
-    this.pendingSchemaErrors = null;
-    this.reportingSchemaError = false;
-    this.middleware = null;
-    this.batchedKeys = null;
-    this._children = null;
-
+  constructor(
+    initialState: T,
+    options: StoreOptions<T> | undefined,
+    owned: boolean,
+    children: Map<PropertyKey, AnyNode> | null
+  ) {
+    let eqReg: Record<string, ((prev: any, next: any) => boolean) | undefined> | null = null;
     if (options?.equals) {
-      const reg: Record<string, ((prev: any, next: any) => boolean) | undefined> = Object.create(null);
+      eqReg = Object.create(null);
       for (const key in options.equals) {
         const fn = options.equals[key as keyof T];
-        if (fn) reg[key] = fn as (prev: any, next: any) => boolean;
+        if (fn) eqReg![key] = fn as (prev: any, next: any) => boolean;
       }
-      this.equalityRegistry = reg;
     }
-
+    let schemaReg: Record<string, SchemaProps | undefined> | null = null;
     if (options?.schema) {
       // The loose view sidesteps instantiating StandardSchemaV1<any, T[keyof T]>,
       // which crashes tsc 5.9 (Debug Failure in checkAssertion).
       const src = options.schema as unknown as Record<string, StandardSchemaV1 | undefined>;
-      const reg: Record<string, SchemaProps | undefined> = Object.create(null);
+      schemaReg = Object.create(null);
       for (const key in src) {
         const sch = src[key];
-        if (sch) reg[key] = sch['~standard'];
+        if (sch) schemaReg![key] = sch['~standard'];
       }
-      this.schemaRegistry = reg;
+    }
 
+    // One copy of the shape becomes the live state. The initial values are read back from the
+    // object the caller passed, unless the store owns that object already or a schema may
+    // rewrite them, in which case they get a copy of their own.
+    this._initialState = owned || schemaReg !== null ? { ...initialState } : initialState;
+    this.state = owned ? initialState : { ...initialState };
+    // Listeners are arrays, not Sets: iterating a Set allocates an iterator on
+    // every notify, which only some engines optimize away. Add/remove rebuild
+    // the array (copy-on-write) so a notify already walking one cannot see it
+    // change under it.
+    this.keyListeners = NO_LISTENERS;
+    this.keySubs = NO_LISTENERS;
+    this.equalityRegistry = eqReg;
+    this.schemaRegistry = schemaReg;
+    this.schemaErrors = null;
+    this.middleware = null;
+    this.batched = null;
+    this._epoch = 0;
+    this._fast = eqReg === null && schemaReg === null;
+    this._multi = 0;
+    this._notifying = 0;
+    this._children = children;
+
+    if (schemaReg !== null) {
       // A contract that only holds from the second write isn't a contract: check the
       // starting values too, committing transforms so t=0 matches what a write produces.
       // No handler can exist yet, so rejections go to the console and the raw value
       // stands — a module-scope store fed by corrupt storage must not crash on import.
+      const reg = schemaReg;
       const state = this.state as Record<string, unknown>;
       const initial = this._initialState as Record<string, unknown>;
       for (const key in reg) {
@@ -296,7 +354,15 @@ class Voltix<T extends object> implements StoreType<T> {
         initial[key] = result.value;
       }
     }
+  }
 
+  private _syncFast(): void {
+    const mw = this.middleware;
+    this._fast =
+      (mw === null || mw.length === 0) &&
+      this.schemaRegistry === null &&
+      this.equalityRegistry === null &&
+      this.batched === null;
   }
 
   /** @internal — exposes the equality registry to the selector hook. */
@@ -312,15 +378,8 @@ class Voltix<T extends object> implements StoreType<T> {
     return this.state[key];
   }
 
-  private notifyKey(key: keyof T): void {
-    if (this.batchedKeys) {
-      this.batchedKeys.add(key);
-      return;
-    }
-    const listeners = this.keyListeners[key as string];
-    if (listeners !== undefined) for (let i = 0; i < listeners.length; i++) listeners[i]();
-  }
-
+  // The guarded single-key write: schema, then SameValue, then equality, then notify or
+  // defer to the open batch. Interceptors are the caller's business.
   private applySingleKey<K extends keyof T>(key: K, value: T[K]): void {
     const schemaReg = this.schemaRegistry;
     if (schemaReg !== null) {
@@ -348,11 +407,48 @@ class Voltix<T extends object> implements StoreType<T> {
       if (eq && eq(prev, value)) return;
     }
     this.state[key] = value;
-    this.notifyKey(key);
+    const listeners = this.keyListeners[key as string];
+    if (listeners === undefined) return;
+    const batched = this.batched;
+    if (batched !== null) {
+      if (listeners.e !== this._epoch) {
+        listeners.e = this._epoch;
+        batched.push(key as string);
+      }
+      return;
+    }
+    if (listeners.length === 1) listeners[0]();
+    else this.notifyMany(listeners);
   }
 
   setKey<K extends keyof T>(key: K, value: T[K]): void {
-    if (this.middleware === null || this.middleware.length === 0) {
+    // Anything that can veto, transform, or defer a write takes the guarded path.
+    if (!this._fast) {
+      this.setKeyGuarded(key, value);
+      return;
+    }
+    const state = this.state;
+    const prev = state[key];
+    // SameValue, inlined: this runs on every write, and the builtin costs a call.
+    // Fast `===` first, then the two corrections Object.is makes (NaN, +0/-0).
+    if (prev === value) {
+      if ((prev as unknown) !== 0 || 1 / (prev as unknown as number) === 1 / (value as unknown as number)) return;
+    } else if (prev !== prev && value !== value) {
+      return;
+    }
+    state[key] = value;
+    const listeners = this.keyListeners[key as string];
+    if (listeners !== undefined) {
+      // A lone listener can only remove itself or add others, neither of which this
+      // call can skip, so it runs without the notify guard.
+      if (listeners.length === 1) listeners[0]();
+      else this.notifyMany(listeners);
+    }
+  }
+
+  private setKeyGuarded<K extends keyof T>(key: K, value: T[K]): void {
+    const mw = this.middleware;
+    if (mw === null || mw.length === 0) {
       this.applySingleKey(key, value);
       return;
     }
@@ -375,13 +471,7 @@ class Voltix<T extends object> implements StoreType<T> {
   }
 
   mergeSet<K extends keyof T>(key: K, value: T[K] extends object ? Partial<T[K]> : never): void {
-    if (this.middleware === null || this.middleware.length === 0) {
-      this.applySingleKey(key, { ...this.state[key], ...value } as T[K]);
-      return;
-    }
-    const partial = {} as Partial<T>;
-    partial[key] = { ...this.state[key], ...value } as T[K];
-    this.set(partial);
+    this.setKey(key, { ...this.state[key], ...value } as T[K]);
   }
 
   reset(keys?: (keyof T)[]): void {
@@ -397,26 +487,40 @@ class Voltix<T extends object> implements StoreType<T> {
   }
 
   batch(fn: () => void): void {
-    if (this.batchedKeys) {
+    if (this.batched !== null) {
       fn();
       return;
     }
-    this.batchedKeys = new Set();
+    const keys: string[] = [];
+    this.batched = keys;
+    this._epoch++;
+    this._fast = false;
     try {
       fn();
     } finally {
-      const keys = this.batchedKeys;
-      this.batchedKeys = null;
-      const notified = new Set<StoreListener>();
-      for (const key of keys) {
-        const listeners = this.keyListeners[key as string];
-        if (listeners === undefined) continue;
-        for (let i = 0; i < listeners.length; i++) {
-          const listener = listeners[i];
-          if (!notified.has(listener)) {
-            notified.add(listener);
-            listener();
+      this.batched = null;
+      this._syncFast();
+      if (keys.length !== 0) {
+        const keyListeners = this.keyListeners;
+        // Only multi-key subscriptions need dedup. Separate subscriptions remain
+        // independent even when they use the same callback.
+        const notified = this._multi === 0 ? null : new Set<StoreListener>();
+        this._notifying++;
+        try {
+          for (let k = 0; k < keys.length; k++) {
+            const listeners = keyListeners[keys[k]];
+            if (listeners === undefined) continue;
+            for (let i = 0; i < listeners.length; i++) {
+              const listener = listeners[i];
+              if (notified === null || listener[MULTI_SUBSCRIPTION] !== true) listener();
+              else if (!notified.has(listener)) {
+                notified.add(listener);
+                listener();
+              }
+            }
           }
+        } finally {
+          this._notifying--;
         }
       }
     }
@@ -436,7 +540,14 @@ class Voltix<T extends object> implements StoreType<T> {
 
     for (let i = 0; i < mw.length; i++) {
       const entry = mw[i];
-      if (entry.keys && !entry.keys.some((key) => key in currentUpdate)) continue;
+      const only = entry.keys;
+      if (only !== null) {
+        let touched = false;
+        for (let k = 0; k < only.length; k++) {
+          if (only[k] in currentUpdate) { touched = true; break; }
+        }
+        if (!touched) continue;
+      }
       let out: Partial<T> | false | void;
       try {
         out = entry.callback(currentUpdate, state);
@@ -491,69 +602,152 @@ class Voltix<T extends object> implements StoreType<T> {
     // fully applied and notified, so a handler's own writes can't be overwritten by the
     // remaining keys of the same update.
     if (firstKey !== null) {
-      if (this.batchedKeys) {
+      const keyListeners = this.keyListeners;
+      const batched = this.batched;
+      if (batched !== null) {
+        const epoch = this._epoch;
         if (changedKeys) {
-          for (const key of changedKeys) this.batchedKeys.add(key as keyof T);
+          for (let k = 0; k < changedKeys.length; k++) {
+            const listeners = keyListeners[changedKeys[k]];
+            if (listeners !== undefined && listeners.e !== epoch) {
+              listeners.e = epoch;
+              batched.push(changedKeys[k]);
+            }
+          }
         } else {
-          this.batchedKeys.add(firstKey as keyof T);
+          const listeners = keyListeners[firstKey];
+          if (listeners !== undefined && listeners.e !== epoch) {
+            listeners.e = epoch;
+            batched.push(firstKey);
+          }
         }
       } else {
-        const keyListeners = this.keyListeners;
         if (!changedKeys) {
           const listeners = keyListeners[firstKey];
-          if (listeners !== undefined) for (let i = 0; i < listeners.length; i++) listeners[i]();
+          if (listeners !== undefined) {
+            if (listeners.length === 1) listeners[0]();
+            else this.notifyMany(listeners);
+          }
         } else {
-          const notified = new Set<StoreListener>();
-          for (const key of changedKeys) {
-            const listeners = keyListeners[key];
-            if (listeners === undefined) continue;
-            for (let i = 0; i < listeners.length; i++) {
-              const listener = listeners[i];
-              if (!notified.has(listener)) {
-                notified.add(listener);
-                listener();
+          const notified = this._multi === 0 ? null : new Set<StoreListener>();
+          this._notifying++;
+          try {
+            for (let k = 0; k < changedKeys.length; k++) {
+              const listeners = keyListeners[changedKeys[k]];
+              if (listeners === undefined) continue;
+              for (let i = 0; i < listeners.length; i++) {
+                const listener = listeners[i];
+                if (notified === null || listener[MULTI_SUBSCRIPTION] !== true) listener();
+                else if (!notified.has(listener)) {
+                  notified.add(listener);
+                  listener();
+                }
               }
             }
+          } finally {
+            this._notifying--;
           }
         }
       }
     }
 
-    if (schemaRegistry !== null && this.pendingSchemaErrors !== null) this.flushSchemaErrors();
+    if (schemaRegistry !== null && this.schemaErrors !== null && this.schemaErrors.pending !== null) this.flushSchemaErrors();
   }
 
   intercept(fn: Interceptor<T>, keys?: (keyof T)[]): () => void {
     const entry = { callback: fn, keys: keys ?? null };
     if (!this.middleware) this.middleware = [];
     this.middleware.push(entry);
+    this._fast = false;
 
     return () => {
       if (!this.middleware) return;
       const index = this.middleware.indexOf(entry);
       if (index > -1) {
         this.middleware.splice(index, 1);
+        this._syncFast();
       }
     };
   }
 
   subscribe(keys: (keyof T)[], listener: StoreListener): () => void {
-    const keyListeners = this.keyListeners;
-    for (const key of keys) {
-      const k = key as string;
-      const arr = keyListeners[k];
-      if (arr === undefined) keyListeners[k] = [listener];
-      else if (arr.indexOf(listener) === -1) keyListeners[k] = arr.concat(listener);
+    if (this.keyListeners === NO_LISTENERS) {
+      this.keyListeners = Object.create(null);
+      this.keySubs = Object.create(null);
     }
-
+    const n = keys.length;
+    if (n === 1) {
+      const slot = this.attach(keys[0] as string, listener);
+      return () => {
+        if (slot.i !== -1) this.detach(slot);
+      };
+    }
+    const slots: Slot[] = [];
+    let callback = listener;
+    if (n > 1) {
+      // Give each multi-key subscription its own identity for dedup, without
+      // wrapping single-key listeners or changing the caller's function.
+      callback = () => listener();
+      callback[MULTI_SUBSCRIPTION] = true;
+      this._multi++;
+    }
+    for (let i = 0; i < n; i++) slots.push(this.attach(keys[i] as string, callback));
+    let active = true;
     return () => {
-      for (const key of keys) {
-        const k = key as string;
-        const arr = keyListeners[k];
-        if (arr === undefined) continue;
-        const i = arr.indexOf(listener);
-        if (i > -1) keyListeners[k] = arr.slice(0, i).concat(arr.slice(i + 1));
-      }
+      if (!active) return;
+      active = false;
+      if (n > 1) this._multi--;
+      for (let i = 0; i < slots.length; i++) if (slots[i].i !== -1) this.detach(slots[i]);
     };
+  }
+
+  // A key's listeners are appended to and swap-removed in place, so subscribing and
+  // unsubscribing cost the same at any count. While a notify loop is on the stack the
+  // array is copied first, so the loop never sees it change.
+  private attach(k: string, listener: StoreListener): Slot {
+    let fns = this.keyListeners[k];
+    let subs: Slot[];
+    if (fns === undefined) {
+      fns = [] as unknown as Listeners;
+      fns.e = 0;
+      subs = [];
+      this.keyListeners[k] = fns;
+      this.keySubs[k] = subs;
+    } else {
+      subs = this.keySubs[k]!;
+      if (this._notifying !== 0) this.keyListeners[k] = fns = copyListeners(fns);
+    }
+    const slot: Slot = { i: fns.length, k, s: subs };
+    fns.push(listener);
+    subs.push(slot);
+    return slot;
+  }
+
+  private detach(slot: Slot): void {
+    const i = slot.i;
+    const subs = slot.s;
+    slot.i = -1;
+    let fns = this.keyListeners[slot.k]!;
+    if (this._notifying !== 0) this.keyListeners[slot.k] = fns = copyListeners(fns);
+    const last = fns.length - 1;
+    if (i !== last) {
+      fns[i] = fns[last];
+      const moved = subs[last];
+      subs[i] = moved;
+      moved.i = i;
+    }
+    fns.pop();
+    subs.pop();
+  }
+
+  private notifyMany(listeners: readonly StoreListener[]): void {
+    this._notifying++;
+    try {
+      const n = listeners.length;
+      for (let i = 0; i < n; i++) listeners[i]();
+    } finally {
+      this._notifying--;
+    }
   }
 
   pick<K extends keyof T>(keys: K[]): Pick<T, K> {
@@ -626,14 +820,11 @@ class Voltix<T extends object> implements StoreType<T> {
   }
 
   onSchemaError(handler: (error: SchemaError<T>) => void): () => void {
-    let handlers = this.schemaErrorHandlers;
-    if (handlers === null) {
-      handlers = new Set();
-      this.schemaErrorHandlers = handlers;
-    }
+    const state = this.schemaErrors ?? (this.schemaErrors = { handlers: null, pending: null, reporting: false });
+    const handlers = state.handlers ?? (state.handlers = new Set());
     handlers.add(handler);
     return () => {
-      handlers!.delete(handler);
+      handlers.delete(handler);
     };
   }
 
@@ -649,24 +840,27 @@ class Voltix<T extends object> implements StoreType<T> {
     vendor: string
   ): void {
     const entry: PendingSchemaError = { key, issues, value, vendor };
-    if (this.pendingSchemaErrors === null) this.pendingSchemaErrors = [entry];
-    else this.pendingSchemaErrors.push(entry);
+    const state = this.schemaErrors ?? (this.schemaErrors = { handlers: null, pending: null, reporting: false });
+    if (state.pending === null) state.pending = [entry];
+    else state.pending.push(entry);
   }
 
   /** Dispatch queued rejections. Called once the triggering write has fully settled. */
   private flushSchemaErrors(): void {
-    const pending = this.pendingSchemaErrors;
+    const state = this.schemaErrors;
+    if (state === null) return;
+    const pending = state.pending;
     if (pending === null) return;
-    this.pendingSchemaErrors = null;
+    state.pending = null;
 
-    const handlers = this.schemaErrorHandlers;
+    const handlers = state.handlers;
     // A handler that writes another rejected value would re-enter here forever; while one
     // is running, fall back to the console instead of dispatching again.
-    if (handlers === null || handlers.size === 0 || this.reportingSchemaError) {
+    if (handlers === null || handlers.size === 0 || state.reporting) {
       for (const e of pending) logSchemaError(e.key, e.issues, e.value, e.vendor, 'write to');
       return;
     }
-    this.reportingSchemaError = true;
+    state.reporting = true;
     try {
       for (const e of pending) {
         const error: SchemaError<T> = {
@@ -684,7 +878,7 @@ class Voltix<T extends object> implements StoreType<T> {
         }
       }
     } finally {
-      this.reportingSchemaError = false;
+      state.reporting = false;
     }
   }
 }
@@ -774,10 +968,12 @@ class StoreLookupImpl<Id extends PropertyKey, C extends object> {
   readonly [NODE] = 'lookup' as const;
   private readonly stores = new Map<PropertyKey, AnyNode>();
   private warnedNodeOptions = false;
-  constructor(
-    private readonly factory: (id: Id) => C,
-    private readonly options?: StoreOptions<any>
-  ) {}
+  private readonly factory: (id: Id) => C;
+  private readonly options: StoreOptions<any> | undefined;
+  constructor(factory: (id: Id) => C, options?: StoreOptions<any>) {
+    this.factory = factory;
+    this.options = options;
+  }
   _step(key: PropertyKey): AnyNode {
     let store = this.stores.get(key);
     if (store === undefined) {
@@ -857,21 +1053,28 @@ export function createStore(
   const source = shape as Record<string, unknown>;
   let leaves: Record<string, unknown> = source;
   let children: Map<PropertyKey, AnyNode> | null = null;
-  for (const key of Object.keys(source)) {
+  for (const key in source) {
     const value = source[key];
     if (isNode(value)) {
-      if (children === null) {
-        children = new Map();
-        leaves = { ...source };
-      }
+      if (children === null) children = new Map();
       children.set(key, value);
-      delete leaves[key];
+    }
+  }
+  if (children !== null) {
+    // Copy the leaves over rather than deleting the children out of a clone: a delete
+    // can demote the object to a slow dictionary layout, and the store keeps it.
+    leaves = {};
+    for (const key of Object.keys(source)) {
+      if (!children.has(key)) leaves[key] = source[key];
     }
   }
 
-  const store = new Voltix(leaves, options as StoreOptions<Record<string, unknown>> | undefined) as unknown as NavStore;
-  store._children = children;
-  return store;
+  return new Voltix(
+    leaves,
+    options as StoreOptions<Record<string, unknown>> | undefined,
+    children !== null,
+    children
+  ) as unknown as NavStore;
 }
 
 /**
@@ -1049,7 +1252,9 @@ export function useStoreSelector<T extends object, S extends SelectorInput<T>>(
     r.subscribe = (onStoreChange: () => void) => store.subscribe(r.keys!, onStoreChange);
   }
   if (!r.getSnapshot) {
-    const eqReg = (store as InternalStore<T>)._eqReg;
+    // Absent on stores from other libraries that implement the interface (warp rows), so treat
+    // anything but a registry as "no store-level equality".
+    const eqReg = (store as InternalStore<T>)._eqReg ?? null;
     r.getSnapshot = (): Picked<T, S> => {
       const normalized = r.normalized!;
       const current = store.get();

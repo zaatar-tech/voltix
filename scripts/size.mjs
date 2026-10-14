@@ -27,6 +27,7 @@ const size = (bytes / 1000).toFixed(1);
 
 // Every spot that states the size, with the number as capture group 1.
 const CLAIMS = [
+  ['package.json', /([\d.]+)(?= KB, zero dependencies)/g],
   ['README.md', /(?<=gzip-)([\d.]+)(?=%20KB-)/g],
   ['README.md', /(?<=\*\*~)([\d.]+)(?= KB\*\*)/g],
   ['README.md', /(?<=~)([\d.]+)(?= KB gzipped)/g],

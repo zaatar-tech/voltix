@@ -427,6 +427,49 @@ describe('createStore', () => {
       expect(listener).toHaveBeenCalledTimes(1)
     })
 
+    it.each(['set', 'batch'] as const)('%s keeps separate single-key subscriptions when another subscription spans keys', (method) => {
+      const store = createStore({ a: 0, b: 0, c: 0, d: 0 })
+      const listener = vi.fn()
+      store.subscribe(['a'], listener)
+      store.subscribe(['a'], listener)
+      store.subscribe(['b'], listener)
+      const unrelated = vi.fn()
+      store.subscribe(['c', 'd'], unrelated)
+
+      if (method === 'set') store.set({ a: 1, b: 1 })
+      else store.batch(() => {
+        store.setKey('a', 1)
+        store.setKey('b', 1)
+      })
+
+      expect(listener).toHaveBeenCalledTimes(3)
+      expect(unrelated).not.toHaveBeenCalled()
+    })
+
+    it.each(['set', 'batch'] as const)('%s notifies each subscription when single- and multi-key subscriptions share a callback', (method) => {
+      const store = createStore({ a: 0, b: 0, c: 0 })
+      const listener = vi.fn()
+      store.subscribe(['a'], listener)
+      const off = store.subscribe(['a', 'b'], listener)
+      store.subscribe(['b', 'c'], listener)
+      const write = (value: number) => {
+        if (method === 'set') store.set({ a: value, b: value, c: value })
+        else store.batch(() => {
+          store.setKey('a', value)
+          store.setKey('b', value)
+          store.setKey('c', value)
+        })
+      }
+
+      write(1)
+      expect(listener).toHaveBeenCalledTimes(3)
+
+      listener.mockClear()
+      off()
+      write(2)
+      expect(listener).toHaveBeenCalledTimes(2)
+    })
+
     it('returns an unsubscribe function', () => {
       const store = createStore({ a: 1 })
       const listener = vi.fn()
@@ -463,6 +506,127 @@ describe('createStore', () => {
       store.set({ x: 1 })
       expect(l1).not.toHaveBeenCalled()
       expect(l2).toHaveBeenCalledTimes(1)
+    })
+
+    it('keeps the others when the first of three unsubscribes', () => {
+      const store = createStore({ x: 0 })
+      const l1 = vi.fn()
+      const l2 = vi.fn()
+      const l3 = vi.fn()
+      const unsub1 = store.subscribe(['x'], l1)
+      store.subscribe(['x'], l2)
+      store.subscribe(['x'], l3)
+
+      unsub1()
+      store.set({ x: 1 })
+      expect(l1).not.toHaveBeenCalled()
+      expect(l2).toHaveBeenCalledTimes(1)
+      expect(l3).toHaveBeenCalledTimes(1)
+    })
+
+    it('unsubscribe is idempotent and never removes a later subscription', () => {
+      const store = createStore({ x: 0 })
+      const l1 = vi.fn()
+      const l2 = vi.fn()
+      const unsub1 = store.subscribe(['x'], l1)
+      unsub1()
+      store.subscribe(['x'], l2)
+      unsub1()
+
+      store.set({ x: 1 })
+      expect(l1).not.toHaveBeenCalled()
+      expect(l2).toHaveBeenCalledTimes(1)
+    })
+
+    it('a listener that unsubscribes itself mid-notify is not called again', () => {
+      const store = createStore({ x: 0 })
+      const calls: string[] = []
+      const l2 = vi.fn()
+      const unsub1 = store.subscribe(['x'], () => {
+        calls.push('l1')
+        unsub1()
+      })
+      store.subscribe(['x'], l2)
+
+      store.set({ x: 1 })
+      store.set({ x: 2 })
+      expect(calls).toEqual(['l1'])
+      expect(l2).toHaveBeenCalledTimes(2)
+    })
+
+    it('every listener runs when the first one unsubscribes itself mid-notify', () => {
+      const store = createStore({ x: 0 })
+      const seen: string[] = []
+      const unsubA = store.subscribe(['x'], () => {
+        seen.push('a')
+        unsubA()
+      })
+      store.subscribe(['x'], () => seen.push('b'))
+      store.subscribe(['x'], () => seen.push('c'))
+      store.subscribe(['x'], () => seen.push('d'))
+
+      store.set({ x: 1 })
+      expect(seen).toEqual(['a', 'b', 'c', 'd'])
+
+      seen.length = 0
+      store.set({ x: 2 })
+      expect(seen.sort()).toEqual(['b', 'c', 'd'])
+    })
+
+    it('a listener removed by another mid-notify still finishes that round, then stops', () => {
+      const store = createStore({ x: 0 })
+      const seen: string[] = []
+      let unsubC: () => void = () => {}
+      store.subscribe(['x'], () => {
+        seen.push('a')
+        unsubC()
+      })
+      store.subscribe(['x'], () => seen.push('b'))
+      unsubC = store.subscribe(['x'], () => seen.push('c'))
+
+      store.set({ x: 1 })
+      expect(seen).toEqual(['a', 'b', 'c'])
+
+      seen.length = 0
+      store.set({ x: 2 })
+      expect(seen).toEqual(['a', 'b'])
+    })
+
+    it('a listener subscribed during a notify runs from the next write', () => {
+      for (const others of [0, 1]) {
+        const store = createStore({ x: 0 })
+        const late = vi.fn()
+        let added = false
+        for (let i = 0; i < others; i++) store.subscribe(['x'], () => {})
+        store.subscribe(['x'], () => {
+          if (!added) {
+            added = true
+            store.subscribe(['x'], late)
+          }
+        })
+
+        store.set({ x: 1 })
+        expect(late).not.toHaveBeenCalled()
+        store.set({ x: 2 })
+        expect(late).toHaveBeenCalledTimes(1)
+      }
+    })
+
+    it('mounting and unmounting many subscribers on one key leaves it clean', () => {
+      const store = createStore({ x: 0 })
+      const l = vi.fn()
+      const offs = Array.from({ length: 500 }, () => store.subscribe(['x'], l))
+      store.set({ x: 1 })
+      expect(l).toHaveBeenCalledTimes(500)
+
+      for (let i = offs.length - 1; i >= 0; i--) offs[i]()
+      store.set({ x: 2 })
+      expect(l).toHaveBeenCalledTimes(500)
+
+      const off = store.subscribe(['x'], l)
+      store.set({ x: 3 })
+      expect(l).toHaveBeenCalledTimes(501)
+      off()
     })
   })
 
